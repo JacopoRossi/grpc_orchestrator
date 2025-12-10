@@ -36,10 +36,14 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     schedule.time_horizon_end_us = 10000000;  // 10 seconds
     schedule.tick_duration_us = 1000;         // 1ms
     
+    // Check if running in Docker (use hostname) or locally (use localhost)
+    const char* docker_env = std::getenv("DOCKER_CONTAINER");
+    bool use_docker_hostnames = (docker_env != nullptr);
+    
     // Task 1: Execute at 1 second
     ScheduledTask task1;
     task1.task_id = "task_1";
-    task1.task_address = "localhost:50051";
+    task1.task_address = use_docker_hostnames ? "task1:50051" : "localhost:50051";
     task1.scheduled_time_us = 1000000;  // 1 second
     task1.deadline_us = 2000000;        // 2 seconds
     task1.priority = 10;
@@ -52,7 +56,7 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     // Task 2: Execute at 2 seconds
     ScheduledTask task2;
     task2.task_id = "task_2";
-    task2.task_address = "localhost:50052";
+    task2.task_address = use_docker_hostnames ? "task2:50051" : "localhost:50052";
     task2.scheduled_time_us = 2000000;  // 2 seconds
     task2.deadline_us = 3000000;        // 3 seconds
     task2.priority = 5;
@@ -65,7 +69,7 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     // Task 3: Execute at 3 seconds
     ScheduledTask task3;
     task3.task_id = "task_3";
-    task3.task_address = "localhost:50053";
+    task3.task_address = use_docker_hostnames ? "task3:50051" : "localhost:50053";
     task3.scheduled_time_us = 3000000;  // 3 seconds
     task3.deadline_us = 5000000;        // 5 seconds
     task3.priority = 8;
@@ -80,7 +84,9 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     schedule.tasks.push_back(task3);
     
     std::cout << "[ScheduleParser] Created test schedule with " 
-              << schedule.tasks.size() << " tasks" << std::endl;
+              << schedule.tasks.size() << " tasks" 
+              << (use_docker_hostnames ? " (Docker mode)" : " (Local mode)")
+              << std::endl;
     
     return schedule;
 }

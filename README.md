@@ -38,7 +38,26 @@ Il protocollo è definito in `proto/orchestrator.proto` e include:
   - `StopTask`: Ferma il task (graceful shutdown)
   - `GetTaskStatus`: Ottiene lo stato corrente del task
 
-## Requisiti
+## Deployment Options
+
+Questo progetto supporta due modalità di deployment:
+
+1. **🐳 Docker (Consigliato)**: Ogni componente gira in un container separato
+2. **💻 Native**: Compilazione ed esecuzione diretta sul sistema host
+
+## 🐳 Quick Start con Docker
+
+```bash
+# Build delle immagini Docker
+./docker-build.sh
+
+# Avvia tutti i container
+./docker-run.sh
+```
+
+Vedi [DOCKER.md](DOCKER.md) per la guida completa Docker.
+
+## 💻 Requisiti per Compilazione Native
 
 - CMake >= 3.15
 - C++17 compiler (GCC 7+, Clang 5+, MSVC 2017+)

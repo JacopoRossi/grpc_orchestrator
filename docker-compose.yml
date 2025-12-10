@@ -1,0 +1,101 @@
+version: '3.8'
+
+services:
+  # Orchestrator service
+  orchestrator:
+    build:
+      context: .
+      dockerfile: Dockerfile.orchestrator
+    container_name: grpc_orchestrator
+    hostname: orchestrator
+    networks:
+      - grpc_network
+    ports:
+      - "50050:50050"
+    environment:
+      - LISTEN_ADDRESS=0.0.0.0:50050
+      - DOCKER_CONTAINER=true
+    depends_on:
+      - task1
+      - task2
+      - task3
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "orchestrator_main"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Task 1
+  task1:
+    build:
+      context: .
+      dockerfile: Dockerfile.task
+    container_name: grpc_task1
+    hostname: task1
+    networks:
+      - grpc_network
+    ports:
+      - "50051:50051"
+    command: ["./task_main", "task_1", "0.0.0.0:50051", "orchestrator:50050"]
+    environment:
+      - TASK_ID=task_1
+      - LISTEN_ADDRESS=0.0.0.0:50051
+      - ORCHESTRATOR_ADDRESS=orchestrator:50050
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "task_main"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Task 2
+  task2:
+    build:
+      context: .
+      dockerfile: Dockerfile.task
+    container_name: grpc_task2
+    hostname: task2
+    networks:
+      - grpc_network
+    ports:
+      - "50052:50051"
+    command: ["./task_main", "task_2", "0.0.0.0:50051", "orchestrator:50050"]
+    environment:
+      - TASK_ID=task_2
+      - LISTEN_ADDRESS=0.0.0.0:50051
+      - ORCHESTRATOR_ADDRESS=orchestrator:50050
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "task_main"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # Task 3
+  task3:
+    build:
+      context: .
+      dockerfile: Dockerfile.task
+    container_name: grpc_task3
+    hostname: task3
+    networks:
+      - grpc_network
+    ports:
+      - "50053:50051"
+    command: ["./task_main", "task_3", "0.0.0.0:50051", "orchestrator:50050"]
+    environment:
+      - TASK_ID=task_3
+      - LISTEN_ADDRESS=0.0.0.0:50051
+      - ORCHESTRATOR_ADDRESS=orchestrator:50050
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "task_main"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+networks:
+  grpc_network:
+    driver: bridge
+    name: grpc_orchestrator_network

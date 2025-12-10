@@ -33,5 +33,9 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 
+# Docker
+docker/volumes/
+*.tar
+
 # Other
 .DS_Store

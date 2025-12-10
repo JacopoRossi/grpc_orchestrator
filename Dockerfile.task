@@ -1,0 +1,49 @@
+# Dockerfile for Task
+FROM ubuntu:24.04 as builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    libgrpc++-dev \
+    libprotobuf-dev \
+    protobuf-compiler-grpc \
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy source code
+WORKDIR /build
+COPY CMakeLists.txt ./
+COPY proto/ ./proto/
+COPY include/ ./include/
+COPY src/ ./src/
+COPY examples/ ./examples/
+
+# Build the project
+RUN mkdir -p build && cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    make -j$(nproc)
+
+# Runtime stage
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y \
+    libgrpc++1.51 \
+    libprotobuf32t64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary from builder
+COPY --from=builder /build/build/bin/task_main /app/task_main
+
+WORKDIR /app
+
+# Expose gRPC port (will be overridden by docker-compose)
+EXPOSE 50051
+
+# Default command (will be overridden by docker-compose)
+CMD ["./task_main", "task_1", "0.0.0.0:50051", "orchestrator:50050"]
