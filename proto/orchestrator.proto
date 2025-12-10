@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package orchestrator;
+
+// ============================================================================
+// Service Definitions
+// ============================================================================
+
+// Service exposed by the Orchestrator to receive task completion notifications
+service OrchestratorService {
+  // Called by task wrapper when task completes
+  rpc NotifyTaskEnd(TaskEndNotification) returns (TaskEndResponse);
+  
+  // Health check for orchestrator
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// Service exposed by each Task Wrapper to receive commands from orchestrator
+service TaskService {
+  // Start task execution
+  rpc StartTask(StartTaskRequest) returns (StartTaskResponse);
+  
+  // Stop task execution (graceful shutdown)
+  rpc StopTask(StopTaskRequest) returns (StopTaskResponse);
+  
+  // Get task status
+  rpc GetTaskStatus(TaskStatusRequest) returns (TaskStatusResponse);
+}
+
+// ============================================================================
+// Message Definitions
+// ============================================================================
+
+// Task execution states
+enum TaskState {
+  TASK_STATE_UNKNOWN = 0;
+  TASK_STATE_IDLE = 1;
+  TASK_STATE_STARTING = 2;
+  TASK_STATE_RUNNING = 3;
+  TASK_STATE_COMPLETED = 4;
+  TASK_STATE_FAILED = 5;
+  TASK_STATE_STOPPED = 6;
+}
+
+// Task execution result
+enum TaskResult {
+  TASK_RESULT_UNKNOWN = 0;
+  TASK_RESULT_SUCCESS = 1;
+  TASK_RESULT_FAILURE = 2;
+  TASK_RESULT_TIMEOUT = 3;
+  TASK_RESULT_CANCELLED = 4;
+}
+
+// --- StartTask Messages ---
+message StartTaskRequest {
+  string task_id = 1;                    // Unique task identifier
+  int64 scheduled_time_us = 2;           // Scheduled execution time (microseconds)
+  int64 deadline_us = 3;                 // Task deadline (microseconds)
+  map<string, string> parameters = 4;    // Task-specific parameters
+  int32 priority = 5;                    // Task priority
+}
+
+message StartTaskResponse {
+  bool success = 1;
+  string message = 2;
+  int64 actual_start_time_us = 3;        // Actual start time
+  string task_id = 4;
+}
+
+// --- StopTask Messages ---
+message StopTaskRequest {
+  string task_id = 1;
+  int32 timeout_ms = 2;                  // Graceful shutdown timeout
+}
+
+message StopTaskResponse {
+  bool success = 1;
+  string message = 2;
+  int64 stop_time_us = 3;
+}
+
+// --- TaskStatus Messages ---
+message TaskStatusRequest {
+  string task_id = 1;
+}
+
+message TaskStatusResponse {
+  string task_id = 1;
+  TaskState state = 2;
+  int64 start_time_us = 3;
+  int64 elapsed_time_us = 4;
+  double cpu_usage_percent = 5;
+  int64 memory_usage_bytes = 6;
+}
+
+// --- TaskEnd Notification Messages ---
+message TaskEndNotification {
+  string task_id = 1;
+  TaskResult result = 2;
+  int64 start_time_us = 3;
+  int64 end_time_us = 4;
+  int64 execution_duration_us = 5;
+  string error_message = 6;              // Empty if success
+  map<string, string> metrics = 7;       // Additional metrics
+}
+
+message TaskEndResponse {
+  bool acknowledged = 1;
+  string message = 2;
+}
+
+// --- Health Check Messages ---
+message HealthCheckRequest {
+  string service_name = 1;
+}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string status = 2;
+  int64 timestamp_us = 3;
+}
