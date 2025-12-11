@@ -1,6 +1,7 @@
 #include "task_wrapper.h"
 #include <iostream>
 #include <chrono>
+#include <pthread.h>
 
 namespace orchestrator {
 
@@ -105,6 +106,16 @@ TaskWrapper::~TaskWrapper() {
     stop();
 }
 
+void TaskWrapper::set_rt_config(const RTConfig& config) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    rt_config_ = config;
+    
+    std::cout << "[Task " << task_id_ << "] Real-time configuration set:" << std::endl;
+    std::cout << "  Policy: " << RTUtils::policy_to_string(config.policy) << std::endl;
+    std::cout << "  Priority: " << config.priority << std::endl;
+    std::cout << "  CPU Affinity: " << (config.cpu_affinity >= 0 ? std::to_string(config.cpu_affinity) : "none") << std::endl;
+}
+
 void TaskWrapper::start() {
     if (running_.exchange(true)) {
         std::cout << "[Task " << task_id_ << "] Already running" << std::endl;
@@ -161,6 +172,11 @@ void TaskWrapper::execute_task(const StartTaskRequest& request) {
 void TaskWrapper::task_execution_thread(StartTaskRequest request) {
     std::cout << "[Task " << task_id_ << "] Starting task execution" << std::endl;
     
+    // Apply real-time configuration to execution thread
+    if (rt_config_.policy != RT_POLICY_NONE) {
+        RTUtils::apply_rt_config(rt_config_);
+    }
+    
     state_ = TASK_STATE_STARTING;
     start_time_us_ = get_current_time_us();
     
@@ -169,6 +185,9 @@ void TaskWrapper::task_execution_thread(StartTaskRequest request) {
     for (const auto& param : request.parameters()) {
         params[param.first] = param.second;
     }
+    
+    // Add task_id to parameters so the callback can identify which task it is
+    params["task_id"] = task_id_;
     
     state_ = TASK_STATE_RUNNING;
     

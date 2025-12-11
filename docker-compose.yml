@@ -12,14 +12,29 @@ services:
       - grpc_network
     ports:
       - "50050:50050"
+    command: >
+      ./orchestrator_main
+      --address 0.0.0.0:50050
+      --policy fifo
+      --priority 80
+      --cpu-affinity 0
     environment:
       - LISTEN_ADDRESS=0.0.0.0:50050
       - DOCKER_CONTAINER=true
+    # Real-time configuration
+    cpuset: "0"
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
+      rttime: -1
+      memlock: 2048000000
+    security_opt:
+      - seccomp:unconfined
     depends_on:
       - task1
       - task2
       - task3
-    restart: unless-stopped
     healthcheck:
       test: ["CMD", "pgrep", "-f", "orchestrator_main"]
       interval: 5s
@@ -37,12 +52,28 @@ services:
       - grpc_network
     ports:
       - "50051:50051"
-    command: ["./task_main", "task_1", "0.0.0.0:50051", "orchestrator:50050"]
+    command: >
+      ./task_main
+      --name task_1
+      --address 0.0.0.0:50051
+      --orchestrator orchestrator:50050
+      --policy fifo
+      --priority 75
+      --cpu-affinity 1
     environment:
       - TASK_ID=task_1
       - LISTEN_ADDRESS=0.0.0.0:50051
       - ORCHESTRATOR_ADDRESS=orchestrator:50050
-    restart: unless-stopped
+    # Real-time configuration
+    cpuset: "1"
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
+      rttime: -1
+      memlock: 2048000000
+    security_opt:
+      - seccomp:unconfined
     healthcheck:
       test: ["CMD", "pgrep", "-f", "task_main"]
       interval: 5s
@@ -60,12 +91,28 @@ services:
       - grpc_network
     ports:
       - "50052:50051"
-    command: ["./task_main", "task_2", "0.0.0.0:50051", "orchestrator:50050"]
+    command: >
+      ./task_main
+      --name task_2
+      --address 0.0.0.0:50051
+      --orchestrator orchestrator:50050
+      --policy fifo
+      --priority 75
+      --cpu-affinity 2
     environment:
       - TASK_ID=task_2
       - LISTEN_ADDRESS=0.0.0.0:50051
       - ORCHESTRATOR_ADDRESS=orchestrator:50050
-    restart: unless-stopped
+    # Real-time configuration
+    cpuset: "2"
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
+      rttime: -1
+      memlock: 2048000000
+    security_opt:
+      - seccomp:unconfined
     healthcheck:
       test: ["CMD", "pgrep", "-f", "task_main"]
       interval: 5s
@@ -83,12 +130,28 @@ services:
       - grpc_network
     ports:
       - "50053:50051"
-    command: ["./task_main", "task_3", "0.0.0.0:50051", "orchestrator:50050"]
+    command: >
+      ./task_main
+      --name task_3
+      --address 0.0.0.0:50051
+      --orchestrator orchestrator:50050
+      --policy fifo
+      --priority 75
+      --cpu-affinity 3
     environment:
       - TASK_ID=task_3
       - LISTEN_ADDRESS=0.0.0.0:50051
       - ORCHESTRATOR_ADDRESS=orchestrator:50050
-    restart: unless-stopped
+    # Real-time configuration
+    cpuset: "3"
+    cap_add:
+      - SYS_NICE
+    ulimits:
+      rtprio: 99
+      rttime: -1
+      memlock: 2048000000
+    security_opt:
+      - seccomp:unconfined
     healthcheck:
       test: ["CMD", "pgrep", "-f", "task_main"]
       interval: 5s

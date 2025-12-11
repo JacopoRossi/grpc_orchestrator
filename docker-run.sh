@@ -26,7 +26,16 @@ if ! docker images | grep -q "grpc-orchestrator"; then
 fi
 
 # Start services
-echo -e "${GREEN}Starting services...${NC}"
+echo -e "${GREEN}Starting services with Real-Time configuration...${NC}"
+echo ""
+echo -e "${YELLOW}Real-Time Settings:${NC}"
+echo "  - Policy: SCHED_FIFO"
+echo "  - Orchestrator: Priority 80, CPU 0"
+echo "  - Task 1: Priority 75, CPU 1"
+echo "  - Task 2: Priority 75, CPU 2"
+echo "  - Task 3: Priority 75, CPU 3"
+echo "  - Memory Locking: Enabled"
+echo ""
 docker-compose up
 
 # Cleanup function

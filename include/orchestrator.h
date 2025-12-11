@@ -2,6 +2,7 @@
 
 #include "schedule.h"
 #include "orchestrator.grpc.pb.h"
+#include "rt_utils.h"
 #include <grpcpp/grpcpp.h>
 #include <memory>
 #include <thread>
@@ -51,6 +52,9 @@ public:
     
     // Load and set the task schedule
     void load_schedule(const TaskSchedule& schedule);
+    
+    // Set real-time configuration for orchestrator threads
+    void set_rt_config(const RTConfig& config);
     
     // Start the orchestrator (begins scheduling tasks)
     void start();
@@ -102,7 +106,11 @@ private:
     
     // Synchronization
     std::condition_variable completion_cv_;
+    std::condition_variable task_end_cv_;  // For sequential execution
     std::atomic<int> pending_tasks_;
+    
+    // Real-time configuration
+    RTConfig rt_config_;
 };
 
 } // namespace orchestrator

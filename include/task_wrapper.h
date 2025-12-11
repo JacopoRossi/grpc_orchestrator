@@ -1,6 +1,7 @@
 #pragma once
 
 #include "orchestrator.grpc.pb.h"
+#include "rt_utils.h"
 #include <grpcpp/grpcpp.h>
 #include <memory>
 #include <thread>
@@ -47,6 +48,9 @@ public:
         TaskExecutionCallback execution_callback);
     
     ~TaskWrapper();
+    
+    // Set real-time configuration for task execution thread
+    void set_rt_config(const RTConfig& config);
     
     // Start the task wrapper (listen for commands)
     void start();
@@ -104,6 +108,9 @@ private:
     
     // Thread safety
     mutable std::mutex mutex_;
+    
+    // Real-time configuration
+    RTConfig rt_config_;
 };
 
 } // namespace orchestrator

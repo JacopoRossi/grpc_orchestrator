@@ -2,6 +2,7 @@
 #include <iostream>
 #include <chrono>
 #include <algorithm>
+#include <pthread.h>
 
 namespace orchestrator {
 
@@ -70,6 +71,16 @@ void Orchestrator::load_schedule(const TaskSchedule& schedule) {
               << schedule_.tasks.size() << " tasks" << std::endl;
 }
 
+void Orchestrator::set_rt_config(const RTConfig& config) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    rt_config_ = config;
+    
+    std::cout << "[Orchestrator] Real-time configuration set:" << std::endl;
+    std::cout << "  Policy: " << RTUtils::policy_to_string(config.policy) << std::endl;
+    std::cout << "  Priority: " << config.priority << std::endl;
+    std::cout << "  CPU Affinity: " << (config.cpu_affinity >= 0 ? std::to_string(config.cpu_affinity) : "none") << std::endl;
+}
+
 void Orchestrator::start() {
     if (running_.exchange(true)) {
         std::cout << "[Orchestrator] Already running" << std::endl;
@@ -81,6 +92,16 @@ void Orchestrator::start() {
     
     // Start gRPC server in separate thread
     server_thread_ = std::thread([this]() {
+        // Apply real-time configuration to server thread if requested
+        if (rt_config_.policy != RT_POLICY_NONE) {
+            RTConfig server_config = rt_config_;
+            // Server thread typically has lower priority than scheduler
+            if (server_config.priority > 1) {
+                server_config.priority -= 1;
+            }
+            RTUtils::apply_rt_config(server_config);
+        }
+        
         grpc::ServerBuilder builder;
         builder.AddListeningPort(listen_address_, grpc::InsecureServerCredentials());
         builder.RegisterService(service_.get());
@@ -166,52 +187,73 @@ void Orchestrator::on_task_end(const TaskEndNotification& notification) {
     active_tasks_.erase(it);
     
     // Decrement pending tasks counter
-    if (--pending_tasks_ == 0 && next_task_index_ >= schedule_.tasks.size()) {
+    --pending_tasks_;
+    
+    // Notify that a task has ended (for sequential execution)
+    task_end_cv_.notify_one();
+    
+    // Check if all tasks are done
+    if (pending_tasks_ == 0 && next_task_index_ >= schedule_.tasks.size()) {
         completion_cv_.notify_all();
     }
 }
 
 void Orchestrator::scheduler_loop() {
-    std::cout << "[Orchestrator] Scheduler loop started" << std::endl;
+    std::cout << "[Orchestrator] Scheduler loop started (SEQUENTIAL MODE)" << std::endl;
     
-    while (running_) {
-        int64_t current_time_us = get_current_time_us() - start_time_us_;
+    // Apply real-time configuration to scheduler thread
+    if (rt_config_.policy != RT_POLICY_NONE) {
+        RTUtils::apply_rt_config(rt_config_);
+    }
+    
+    // Execute tasks sequentially - each task waits for previous to complete
+    for (size_t i = 0; i < schedule_.tasks.size() && running_; i++) {
+        const ScheduledTask& task = schedule_.tasks[i];
         
-        // Check if there are tasks to schedule
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::cout << "\n[Orchestrator] ========================================" << std::endl;
+        std::cout << "[Orchestrator] Starting task " << (i+1) << "/" << schedule_.tasks.size() 
+                  << ": " << task.task_id << std::endl;
+        std::cout << "[Orchestrator] ========================================\n" << std::endl;
         
-        while (next_task_index_ < schedule_.tasks.size()) {
-            const ScheduledTask& task = schedule_.tasks[next_task_index_];
-            
-            if (task.scheduled_time_us <= current_time_us) {
-                std::cout << "[Orchestrator] Scheduling task: " << task.task_id 
-                          << " at time " << current_time_us << " us" << std::endl;
-                
-                // Execute task in separate thread to avoid blocking scheduler
-                std::thread([this, task]() {
-                    execute_task(task);
-                }).detach();
-                
-                next_task_index_++;
-                pending_tasks_++;
-            } else {
-                // Next task is in the future
-                break;
-            }
+        // Launch task on separate thread
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            pending_tasks_++;
+            next_task_index_++;
         }
         
-        // Check if all tasks are done
-        if (next_task_index_ >= schedule_.tasks.size() && pending_tasks_ == 0) {
-            std::cout << "[Orchestrator] All tasks scheduled and completed" << std::endl;
-            completion_cv_.notify_all();
+        std::thread([this, task]() {
+            execute_task(task);
+        }).detach();
+        
+        // Wait for task to be registered in active_tasks first
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            task_end_cv_.wait_for(lock, std::chrono::milliseconds(100), [this, &task]() {
+                return active_tasks_.find(task.task_id) != active_tasks_.end() || !running_;
+            });
+        }
+        
+        // Now wait for task to complete (removed from active_tasks)
+        std::unique_lock<std::mutex> lock(mutex_);
+        task_end_cv_.wait(lock, [this, &task]() {
+            // Check if this specific task has completed (not in active_tasks anymore)
+            return active_tasks_.find(task.task_id) == active_tasks_.end() || !running_;
+        });
+        
+        if (!running_) {
+            std::cout << "[Orchestrator] Scheduler interrupted" << std::endl;
             break;
         }
         
-        // Sleep for a short time (1ms) to avoid busy waiting
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::cout << "\n[Orchestrator] Task " << task.task_id << " completed and acknowledged" << std::endl;
+        std::cout << "[Orchestrator] Proceeding to next task...\n" << std::endl;
     }
     
-    std::cout << "[Orchestrator] Scheduler loop ended" << std::endl;
+    std::cout << "\n[Orchestrator] ========================================" << std::endl;
+    std::cout << "[Orchestrator] All tasks completed successfully!" << std::endl;
+    std::cout << "[Orchestrator] ========================================\n" << std::endl;
+    completion_cv_.notify_all();
 }
 
 void Orchestrator::execute_task(const ScheduledTask& task) {
@@ -226,6 +268,9 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
         exec.result = TASK_RESULT_UNKNOWN;
         
         active_tasks_[task.task_id] = exec;
+        
+        // Notify that task has been registered
+        task_end_cv_.notify_one();
     }
     
     // Create gRPC stub for task

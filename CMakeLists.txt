@@ -74,6 +74,7 @@ add_library(orchestrator_lib
     src/orchestrator.cpp
     src/task_wrapper.cpp
     src/schedule.cpp
+    src/rt_utils.cpp
     ${PROTO_SRCS}
     ${GRPC_SRCS}
 )

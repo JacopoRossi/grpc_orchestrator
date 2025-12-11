@@ -1,7 +1,9 @@
 #include "orchestrator.h"
 #include "schedule.h"
+#include "rt_utils.h"
 #include <iostream>
 #include <signal.h>
+#include <cstring>
 
 using namespace orchestrator;
 
@@ -16,6 +18,18 @@ void signal_handler(int signal) {
     exit(0);
 }
 
+void print_usage(const char* program_name) {
+    std::cout << "Usage: " << program_name << " [OPTIONS]" << std::endl;
+    std::cout << "\nOptions:" << std::endl;
+    std::cout << "  --address <addr>        Listen address (default: 0.0.0.0:50050)" << std::endl;
+    std::cout << "  --schedule <file>       Schedule file path (YAML)" << std::endl;
+    std::cout << "  --policy <policy>       RT scheduling policy: none, fifo, rr (default: none)" << std::endl;
+    std::cout << "  --priority <n>          RT priority: 1-99 (default: 50)" << std::endl;
+    std::cout << "  --cpu-affinity <n>      Bind to CPU core (default: -1, no affinity)" << std::endl;
+    std::cout << "  --lock-memory           Lock memory pages (prevents page faults)" << std::endl;
+    std::cout << "  --help                  Show this help message" << std::endl;
+}
+
 int main(int argc, char** argv) {
     std::cout << "=== gRPC Orchestrator ===" << std::endl;
     std::cout << "Starting orchestrator service..." << std::endl;
@@ -24,21 +38,55 @@ int main(int argc, char** argv) {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     
-    // Create orchestrator
+    // Parse command line arguments
     std::string listen_address = "0.0.0.0:50050";
-    if (argc > 1) {
-        listen_address = argv[1];
+    std::string schedule_file;
+    RTConfig rt_config;
+    
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        
+        if (arg == "--help" || arg == "-h") {
+            print_usage(argv[0]);
+            return 0;
+        } else if (arg == "--address" && i + 1 < argc) {
+            listen_address = argv[++i];
+        } else if (arg == "--schedule" && i + 1 < argc) {
+            schedule_file = argv[++i];
+        } else if (arg == "--policy" && i + 1 < argc) {
+            rt_config.policy = RTUtils::string_to_policy(argv[++i]);
+        } else if (arg == "--priority" && i + 1 < argc) {
+            rt_config.priority = std::stoi(argv[++i]);
+        } else if (arg == "--cpu-affinity" && i + 1 < argc) {
+            rt_config.cpu_affinity = std::stoi(argv[++i]);
+        } else if (arg == "--lock-memory") {
+            rt_config.lock_memory = true;
+            rt_config.prefault_stack = true;
+        } else if (i == 1 && arg[0] != '-') {
+            // Backward compatibility: first positional arg is address
+            listen_address = arg;
+        } else if (i == 2 && arg[0] != '-' && schedule_file.empty()) {
+            // Backward compatibility: second positional arg is schedule file
+            schedule_file = arg;
+        }
     }
     
     Orchestrator orchestrator(listen_address);
     g_orchestrator = &orchestrator;
     
+    // Set real-time configuration
+    if (rt_config.policy != RT_POLICY_NONE) {
+        std::cout << "[Main] Configuring real-time scheduling" << std::endl;
+        orchestrator.set_rt_config(rt_config);
+    } else {
+        std::cout << "[Main] Running in non-real-time mode" << std::endl;
+    }
+    
     // Load schedule
     TaskSchedule schedule;
     
-    if (argc > 2) {
+    if (!schedule_file.empty()) {
         // Load from file
-        std::string schedule_file = argv[2];
         std::cout << "[Main] Loading schedule from: " << schedule_file << std::endl;
         schedule = ScheduleParser::parse_yaml(schedule_file);
     } else {
