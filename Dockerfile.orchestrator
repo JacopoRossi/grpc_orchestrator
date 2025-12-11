@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     libprotobuf-dev \
     protobuf-compiler-grpc \
     pkg-config \
+    libyaml-cpp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy source code
@@ -20,6 +21,7 @@ COPY proto/ ./proto/
 COPY include/ ./include/
 COPY src/ ./src/
 COPY examples/ ./examples/
+COPY schedules/ ./schedules/
 
 # Build the project
 RUN mkdir -p build && cd build && \
@@ -35,10 +37,12 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y \
     libgrpc++1.51 \
     libprotobuf32t64 \
+    libyaml-cpp0.8 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy binary from builder
+# Copy binary and schedules from builder
 COPY --from=builder /build/build/bin/orchestrator_main /app/orchestrator_main
+COPY --from=builder /build/schedules/ /app/schedules/
 
 WORKDIR /app
 

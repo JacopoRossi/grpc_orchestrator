@@ -1,0 +1,63 @@
+# Example Timed Schedule - All tasks run at specific times
+# Tasks execute concurrently based on their scheduled time
+
+schedule:
+  name: "Periodic Monitoring"
+  description: "Tasks execute at scheduled intervals"
+  
+  defaults:
+    priority: 50
+    max_retries: 1
+    
+  tasks:
+    # Immediate execution
+    - id: init_system
+      address: "task1:50051"
+      mode: timed
+      scheduled_time_us: 0  # Start immediately
+      priority: 95
+      critical: true
+      estimated_duration_us: 100000
+      parameters:
+        action: "initialize"
+      
+    # Execute at 1 second
+    - id: sensor_read_1
+      address: "task2:50051"
+      mode: timed
+      scheduled_time_us: 1000000  # 1 second
+      priority: 80
+      estimated_duration_us: 50000
+      parameters:
+        sensor_id: "temp_sensor_1"
+      
+    # Execute at 2 seconds
+    - id: sensor_read_2
+      address: "task3:50051"
+      mode: timed
+      scheduled_time_us: 2000000  # 2 seconds
+      priority: 80
+      estimated_duration_us: 50000
+      parameters:
+        sensor_id: "pressure_sensor"
+      
+    # Execute at 3 seconds
+    - id: data_aggregation
+      address: "task1:50051"
+      mode: timed
+      scheduled_time_us: 3000000  # 3 seconds
+      priority: 70
+      estimated_duration_us: 200000
+      parameters:
+        aggregate_window: 3000
+      
+    # Execute at 5 seconds
+    - id: report_generation
+      address: "task2:50051"
+      mode: timed
+      scheduled_time_us: 5000000  # 5 seconds
+      priority: 60
+      estimated_duration_us: 500000
+      parameters:
+        format: "json"
+        include_charts: true

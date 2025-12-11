@@ -1,0 +1,51 @@
+# Example Sequential Schedule - All tasks run in order
+# Each task waits for the previous one to complete
+
+schedule:
+  name: "Sequential Pipeline"
+  description: "Tasks execute one after another"
+  
+  defaults:
+    priority: 50
+    max_retries: 2
+    
+  tasks:
+    - id: data_acquisition
+      address: "task1:50051"
+      mode: sequential
+      priority: 90
+      critical: true
+      estimated_duration_us: 1000000  # 1 second
+      parameters:
+        source: "sensor_array"
+        sample_rate: 1000
+      
+    - id: preprocessing
+      address: "task2:50051"
+      mode: sequential
+      depends_on: data_acquisition
+      priority: 80
+      estimated_duration_us: 500000
+      parameters:
+        filter_type: "lowpass"
+        cutoff_freq: 100
+      
+    - id: analysis
+      address: "task3:50051"
+      mode: sequential
+      depends_on: preprocessing
+      priority: 70
+      estimated_duration_us: 2000000  # 2 seconds
+      parameters:
+        algorithm: "fft"
+        window_size: 1024
+      
+    - id: storage
+      address: "task1:50051"  # Reuse task1 container
+      mode: sequential
+      depends_on: analysis
+      priority: 60
+      estimated_duration_us: 300000
+      parameters:
+        database: "timeseries_db"
+        compression: true

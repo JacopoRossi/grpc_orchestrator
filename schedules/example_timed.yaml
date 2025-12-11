@@ -1,0 +1,72 @@
+# Example Timed Schedule
+# Tasks execute at specific scheduled times
+
+schedule:
+  name: "Periodic Monitoring"
+  description: "Concurrent sensor monitoring with timed execution"
+  
+  defaults:
+    priority: 50
+    max_retries: 3
+    critical: false
+    
+  tasks:
+    # Immediate initialization
+    - id: system_init
+      address: "task1:50051"
+      mode: timed
+      scheduled_time_us: 0  # Start immediately
+      priority: 95
+      critical: true
+      estimated_duration_us: 200000  # 200ms
+      parameters:
+        action: "initialize"
+        config_file: "/etc/monitor.conf"
+      
+    # Temperature sensor at 1 second
+    - id: temp_sensor_read
+      address: "task2:50052"
+      mode: timed
+      scheduled_time_us: 1000000  # 1 second
+      priority: 80
+      estimated_duration_us: 100000  # 100ms
+      parameters:
+        sensor_type: "temperature"
+        sensor_id: "temp_01"
+        units: "celsius"
+      
+    # Pressure sensor at 2 seconds
+    - id: pressure_sensor_read
+      address: "task3:50053"
+      mode: timed
+      scheduled_time_us: 2000000  # 2 seconds
+      priority: 80
+      estimated_duration_us: 100000  # 100ms
+      parameters:
+        sensor_type: "pressure"
+        sensor_id: "press_01"
+        units: "pascal"
+      
+    # Data aggregation at 3 seconds
+    - id: data_aggregation
+      address: "task1:50051"
+      mode: timed
+      scheduled_time_us: 3000000  # 3 seconds
+      priority: 70
+      estimated_duration_us: 300000  # 300ms
+      parameters:
+        window_size: "1000"
+        aggregation: "mean"
+        output_format: "json"
+      
+    # Report generation at 5 seconds
+    - id: generate_report
+      address: "task2:50052"
+      mode: timed
+      scheduled_time_us: 5000000  # 5 seconds
+      priority: 60
+      estimated_duration_us: 500000  # 500ms
+      parameters:
+        format: "pdf"
+        include_graphs: "true"
+        destination: "/reports/"

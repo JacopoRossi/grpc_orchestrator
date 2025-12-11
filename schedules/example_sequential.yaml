@@ -1,0 +1,60 @@
+# Example Sequential Schedule
+# Tasks execute one after another in a pipeline
+
+schedule:
+  name: "Sequential Pipeline"
+  description: "Data processing pipeline with sequential execution"
+  
+  defaults:
+    priority: 50
+    max_retries: 2
+    critical: true
+    
+  tasks:
+    # Step 1: Data Acquisition
+    - id: data_acquisition
+      address: "task1:50051"
+      mode: sequential
+      priority: 90
+      critical: true
+      estimated_duration_us: 1000000  # 1 second
+      parameters:
+        source: "sensor_array"
+        sample_rate: "1000"
+        buffer_size: "4096"
+      
+    # Step 2: Preprocessing (waits for data_acquisition)
+    - id: preprocessing
+      address: "task2:50052"
+      mode: sequential
+      depends_on: data_acquisition
+      priority: 80
+      estimated_duration_us: 500000  # 500ms
+      parameters:
+        filter: "lowpass"
+        cutoff_freq: "100"
+        normalize: "true"
+      
+    # Step 3: Analysis (waits for preprocessing)
+    - id: analysis
+      address: "task3:50053"
+      mode: sequential
+      depends_on: preprocessing
+      priority: 70
+      estimated_duration_us: 800000  # 800ms
+      parameters:
+        algorithm: "fft"
+        window_size: "1024"
+        overlap: "50"
+      
+    # Step 4: Storage (waits for analysis)
+    - id: storage
+      address: "task1:50051"  # Reuse task1 service
+      mode: sequential
+      depends_on: analysis
+      priority: 60
+      estimated_duration_us: 300000  # 300ms
+      parameters:
+        database: "timeseries_db"
+        compression: "true"
+        retention: "30d"

@@ -1,0 +1,153 @@
+# Complete Task Schedule Template
+# This file shows ALL available parameters with their descriptions
+
+schedule:
+  # Schedule metadata (optional)
+  name: "Schedule Name"
+  description: "Detailed description of what this schedule does"
+  
+  # Default values applied to all tasks (optional)
+  # Individual tasks can override these
+  defaults:
+    priority: 50                    # Default priority (0-100)
+    max_retries: 3                  # Default retry attempts
+    critical: false                 # Default critical flag
+    deadline_us: 1000000            # Default deadline (1 second)
+    
+  # Task definitions (required)
+  tasks:
+    # ========================================
+    # SEQUENTIAL TASK TEMPLATE
+    # ========================================
+    - id: sequential_task_example           # REQUIRED: Unique task identifier
+      address: "task1:50051"                # REQUIRED: gRPC address
+      mode: sequential                      # REQUIRED: Execution mode
+      
+      # Timing (optional for sequential)
+      scheduled_time_us: 0                  # Start time (usually 0 for sequential)
+      deadline_us: 3000000                  # Task deadline in microseconds
+      estimated_duration_us: 500000         # Estimated duration
+      
+      # Priority and criticality
+      priority: 90                          # Priority (0-100, higher = more important)
+      critical: true                        # If true, failure aborts entire schedule
+      max_retries: 3                        # Maximum retry attempts on failure
+      
+      # Dependencies
+      depends_on: previous_task_id          # Wait for this task to complete (optional)
+                                            # Omit or leave empty for no dependency
+      
+      # Custom parameters (optional)
+      parameters:
+        key1: "value1"
+        key2: "value2"
+        mode: "fast"
+        iterations: "100"
+        # task_id is automatically added by parser
+    
+    # ========================================
+    # TIMED TASK TEMPLATE
+    # ========================================
+    - id: timed_task_example
+      address: "task2:50051"
+      mode: timed                           # REQUIRED: Timed execution mode
+      
+      # Timing (required for timed)
+      scheduled_time_us: 5000000            # REQUIRED: Execute at 5 seconds from start
+      deadline_us: 6000000                  # Deadline (6 seconds)
+      estimated_duration_us: 800000         # Estimated duration (800ms)
+      
+      # Priority and criticality
+      priority: 80
+      critical: false
+      max_retries: 2
+      
+      # Dependencies (not used for timed tasks)
+      # depends_on: ""                      # Leave empty or omit
+      
+      # Custom parameters
+      parameters:
+        sensor_id: "temp_01"
+        sample_rate: "1000"
+        filter: "lowpass"
+
+# ========================================
+# FIELD REFERENCE
+# ========================================
+#
+# REQUIRED FIELDS (all tasks):
+#   - id: string                  Unique task identifier
+#   - address: string             gRPC address (e.g., "task1:50051")
+#   - mode: string                "sequential" or "timed"
+#
+# MODE-SPECIFIC REQUIRED:
+#   Sequential mode:
+#     - (none additional)
+#   Timed mode:
+#     - scheduled_time_us: int64  Execution time in microseconds
+#
+# OPTIONAL FIELDS:
+#   - scheduled_time_us: int64    Start time (default: 0 for sequential)
+#   - deadline_us: int64          Task deadline (default: from defaults or 1000000)
+#   - priority: int               Priority 0-100 (default: from defaults or 50)
+#   - max_retries: int            Retry attempts (default: from defaults or 3)
+#   - critical: bool              Critical flag (default: from defaults or false)
+#   - estimated_duration_us: int64 Estimated duration (default: 1000000)
+#   - depends_on: string          Task ID to wait for (sequential only)
+#   - parameters: map             Key-value parameters passed to task
+#
+# TIME UNITS:
+#   All times are in microseconds (µs):
+#     1 ms      = 1,000 µs
+#     100 ms    = 100,000 µs
+#     1 second  = 1,000,000 µs
+#     5 seconds = 5,000,000 µs
+#     1 minute  = 60,000,000 µs
+#
+# ADDRESS MAPPING:
+#   Docker mode (DOCKER_CONTAINER=true):
+#     - Use Docker hostnames: "task1:50051", "task2:50052", "task3:50053"
+#   Native mode (DOCKER_CONTAINER not set):
+#     - Use localhost: "localhost:50051", "localhost:50052", "localhost:50053"
+#
+# EXECUTION MODES:
+#   sequential:
+#     - Tasks execute in order
+#     - Can wait for dependencies via depends_on
+#     - scheduled_time_us is usually 0 (ignored if depends_on is set)
+#   
+#   timed:
+#     - Tasks execute at scheduled_time_us
+#     - Run concurrently with other tasks
+#     - depends_on is ignored
+#
+# DEFAULTS:
+#   - Values in defaults section apply to all tasks
+#   - Individual task values override defaults
+#   - If neither is specified, built-in defaults are used:
+#       priority: 50
+#       max_retries: 3
+#       critical: false
+#       deadline_us: 1000000
+#       estimated_duration_us: 1000000
+#
+# PARAMETERS:
+#   - Arbitrary key-value pairs
+#   - All values are strings (convert in task code)
+#   - task_id is automatically added by parser
+#   - Passed to task via gRPC
+#
+# VALIDATION:
+#   - Parser validates required fields
+#   - Missing optional fields use defaults
+#   - Invalid YAML syntax falls back to test schedule
+#   - Errors are logged with details
+#
+# EXAMPLES:
+#   See:
+#     - schedules/example_hybrid.yaml
+#     - schedules/example_sequential.yaml
+#     - schedules/example_timed.yaml
+#
+# DOCUMENTATION:
+#   See DSL_GUIDE.md for complete reference

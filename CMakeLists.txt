@@ -84,12 +84,14 @@ target_link_libraries(orchestrator_lib
         gRPC::grpc++
         protobuf::libprotobuf
         Threads::Threads
+        yaml-cpp
 )
 
 target_include_directories(orchestrator_lib
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_BINARY_DIR}
+        /usr/include
 )
 
 # ============================================================================

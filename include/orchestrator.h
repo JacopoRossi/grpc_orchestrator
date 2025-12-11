@@ -103,6 +103,7 @@ private:
     mutable std::mutex mutex_;
     std::unordered_map<std::string, TaskExecution> active_tasks_;
     std::vector<TaskExecution> completed_tasks_;
+    std::unordered_map<std::string, bool> task_completed_;  // Track completed tasks for dependencies
     
     // Synchronization
     std::condition_variable completion_cv_;

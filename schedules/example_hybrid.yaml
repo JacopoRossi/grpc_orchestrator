@@ -1,0 +1,63 @@
+# Example Hybrid Schedule - Sequential and Timed Tasks
+# This schedule demonstrates ALL available DSL parameters
+
+schedule:
+  name: "Hybrid Schedule Example"
+  description: "Mix of sequential and timed tasks with all parameters"
+  
+  # Global defaults (optional)
+  defaults:
+    priority: 50
+    max_retries: 3
+    critical: false
+    deadline_us: 1000000  # 1 second
+    
+  # Task definitions
+  tasks:
+    # Task 1: Sequential, no dependencies
+    # Shows ALL available parameters for sequential mode
+    - id: task_1
+      address: "task1:50051"              # gRPC address (task1 on port 50051)
+      mode: sequential                     # Execution mode: sequential or timed
+      scheduled_time_us: 0                 # Start time (0 = immediately for sequential)
+      deadline_us: 3000000                 # Task deadline (3 seconds)
+      priority: 10                         # Priority (0-100, higher = more important)
+      max_retries: 3                       # Maximum retry attempts on failure
+      critical: true                       # If true, failure aborts schedule
+      estimated_duration_us: 500000        # Estimated duration (500ms)
+      # depends_on: ""                     # No dependency (empty or omitted)
+      parameters:                          # Custom parameters passed to task
+        mode: "fast"
+        iterations: "100"
+        # task_id is added automatically by parser
+      
+    # Task 2: Timed, executes at specific time
+    # Shows ALL available parameters for timed mode
+    - id: task_2
+      address: "task2:50052"               # task2 on port 50052
+      mode: timed                          # Timed execution mode
+      scheduled_time_us: 11000000           # Execute at 8 seconds from start
+      deadline_us: 1000000                 # Deadline (1 second after start)
+      priority: 10                         # Same priority as task_1
+      max_retries: 2                       # Fewer retries for non-critical task
+      critical: false                      # Non-critical task
+      estimated_duration_us: 800000        # Estimated duration (800ms)
+      parameters:
+        mode: "normal"
+        data_size: "1024"
+      
+    # Task 3: Sequential, depends on task_1
+    # Shows dependency usage
+    - id: task_3
+      address: "task3:50053"               # task3 on port 50053
+      mode: sequential
+      scheduled_time_us: 0                 # Ignored for sequential (uses dependency)
+      deadline_us: 3000000                 # 3 seconds deadline
+      priority: 10                         # Same priority
+      max_retries: 3
+      critical: true                       # Critical task
+      estimated_duration_us: 500000        # 500ms
+      depends_on: task_1                   # Wait for task_1 to complete
+      parameters:
+        mode: "slow"
+        quality: "high"

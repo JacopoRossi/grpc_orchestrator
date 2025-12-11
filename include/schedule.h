@@ -8,6 +8,12 @@
 
 namespace orchestrator {
 
+// Execution mode for a task
+enum TaskExecutionMode {
+    TASK_MODE_SEQUENTIAL,    // Wait for previous task to complete
+    TASK_MODE_TIMED          // Execute at specific scheduled time
+};
+
 // Represents a scheduled task execution
 struct ScheduledTask {
     std::string task_id;
@@ -16,6 +22,8 @@ struct ScheduledTask {
     int64_t deadline_us;               // Task deadline in microseconds
     int32_t priority;                  // Task priority
     std::map<std::string, std::string> parameters;  // Task parameters
+    TaskExecutionMode execution_mode;  // Sequential or timed execution
+    std::string wait_for_task_id;      // Task ID to wait for (if sequential)
     
     // Optional metadata
     int64_t estimated_duration_us;     // Estimated execution time

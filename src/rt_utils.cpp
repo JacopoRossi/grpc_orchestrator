@@ -33,9 +33,20 @@ bool RTUtils::unlock_memory() {
 }
 
 void RTUtils::prefault_stack(size_t size) {
-    // Allocate memory on stack and touch it to force page faults now
-    unsigned char dummy[size];
-    memset(dummy, 0, size);
+    // Pre-fault stack memory by touching pages recursively
+    // Limit to reasonable size to avoid stack overflow (max 1MB per call)
+    const size_t MAX_CHUNK = 1024 * 1024;  // 1 MB
+    const size_t PAGE_SIZE = 4096;
+    
+    if (size > MAX_CHUNK) {
+        size = MAX_CHUNK;
+    }
+    
+    // Touch each page to force it into memory
+    volatile unsigned char dummy[PAGE_SIZE];
+    for (size_t i = 0; i < size; i += PAGE_SIZE) {
+        dummy[0] = 0;
+    }
     
     std::cout << "[RTUtils] Pre-faulted " << size << " bytes of stack" << std::endl;
 }
