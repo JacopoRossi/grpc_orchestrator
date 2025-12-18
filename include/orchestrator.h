@@ -73,6 +73,9 @@ public:
     
     // Check if orchestrator is running
     bool is_running() const { return running_; }
+    
+    // Get relative time since start (in microseconds)
+    int64_t get_relative_time_us() const { return get_current_time_us() - start_time_us_; }
 
 private:
     // Scheduler thread function

@@ -13,6 +13,9 @@ schedule:
     max_retries: 3                  # Default retry attempts
     critical: false                 # Default critical flag
     deadline_us: 1000000            # Default deadline (1 second)
+    rt_policy: "none"               # RT scheduling: "none", "fifo", "rr", "deadline"
+    rt_priority: 50                 # RT priority (1-99, 99 = highest)
+    cpu_affinity: -1                # CPU core (-1 = no affinity)
     
   # Task definitions (required)
   tasks:
@@ -32,6 +35,11 @@ schedule:
       priority: 90                          # Priority (0-100, higher = more important)
       critical: true                        # If true, failure aborts entire schedule
       max_retries: 3                        # Maximum retry attempts on failure
+      
+      # Real-time configuration (optional)
+      rt_policy: "fifo"                     # RT policy: "none", "fifo", "rr", "deadline"
+      rt_priority: 80                       # RT priority (1-99, 99 = highest)
+      cpu_affinity: 0                       # CPU core to bind to (-1 = no affinity)
       
       # Dependencies
       depends_on: previous_task_id          # Wait for this task to complete (optional)
@@ -61,6 +69,11 @@ schedule:
       priority: 80
       critical: false
       max_retries: 2
+      
+      # Real-time configuration (optional)
+      rt_policy: "rr"                       # RT policy: "none", "fifo", "rr", "deadline"
+      rt_priority: 60                       # RT priority (1-99, 99 = highest)
+      cpu_affinity: 1                       # CPU core to bind to (-1 = no affinity)
       
       # Dependencies (not used for timed tasks)
       # depends_on: ""                      # Leave empty or omit
@@ -95,6 +108,9 @@ schedule:
 #   - estimated_duration_us: int64 Estimated duration (default: 1000000)
 #   - depends_on: string          Task ID to wait for (sequential only)
 #   - parameters: map             Key-value parameters passed to task
+#   - rt_policy: string           RT policy: "none", "fifo", "rr", "deadline" (default: "none")
+#   - rt_priority: int            RT priority 1-99, 99=highest (default: 50)
+#   - cpu_affinity: int           CPU core to bind to, -1=no affinity (default: -1)
 #
 # TIME UNITS:
 #   All times are in microseconds (µs):
@@ -121,6 +137,25 @@ schedule:
 #     - Run concurrently with other tasks
 #     - depends_on is ignored
 #
+# REAL-TIME CONFIGURATION:
+#   rt_policy options:
+#     - "none": No real-time scheduling (default)
+#     - "fifo": SCHED_FIFO - First In First Out, strict priority
+#     - "rr": SCHED_RR - Round Robin with time slicing
+#     - "deadline": SCHED_DEADLINE - Deadline-based scheduling
+#   
+#   rt_priority: 1-99 (99 = highest priority)
+#     - Only used with "fifo" and "rr" policies
+#     - Higher priority tasks preempt lower priority tasks
+#   
+#   cpu_affinity: CPU core number or -1
+#     - Binds task to specific CPU core
+#     - -1 = no affinity (kernel decides)
+#     - Use same core for multiple tasks to test priority preemption
+#   
+#   NOTE: Real-time scheduling requires CAP_SYS_NICE capability
+#         Run with: docker run --cap-add=SYS_NICE ...
+#
 # DEFAULTS:
 #   - Values in defaults section apply to all tasks
 #   - Individual task values override defaults
@@ -130,6 +165,9 @@ schedule:
 #       critical: false
 #       deadline_us: 1000000
 #       estimated_duration_us: 1000000
+#       rt_policy: "none"
+#       rt_priority: 50
+#       cpu_affinity: -1
 #
 # PARAMETERS:
 #   - Arbitrary key-value pairs
@@ -148,6 +186,7 @@ schedule:
 #     - schedules/example_hybrid.yaml
 #     - schedules/example_sequential.yaml
 #     - schedules/example_timed.yaml
+#     - schedules/example_rt_priority_test.yaml  (RT priority testing)
 #
 # DOCUMENTATION:
 #   See DSL_GUIDE.md for complete reference

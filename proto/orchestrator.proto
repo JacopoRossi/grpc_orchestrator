@@ -58,6 +58,9 @@ message StartTaskRequest {
   int64 deadline_us = 3;                 // Task deadline (microseconds)
   map<string, string> parameters = 4;    // Task-specific parameters
   int32 priority = 5;                    // Task priority
+  string rt_policy = 6;                  // Real-time policy: "none", "fifo", "rr", "deadline"
+  int32 rt_priority = 7;                 // Real-time priority (1-99, 99 = highest)
+  int32 cpu_affinity = 8;                // CPU core affinity (-1 = no affinity)
 }
 
 message StartTaskResponse {

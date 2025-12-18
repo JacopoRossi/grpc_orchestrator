@@ -25,6 +25,7 @@ schedule:
       max_retries: 3                       # Maximum retry attempts on failure
       critical: true                       # If true, failure aborts schedule
       estimated_duration_us: 500000        # Estimated duration (500ms)
+      cpu_affinity: 1
       # depends_on: ""                     # No dependency (empty or omitted)
       parameters:                          # Custom parameters passed to task
         mode: "fast"
@@ -42,6 +43,7 @@ schedule:
       max_retries: 2                       # Fewer retries for non-critical task
       critical: false                      # Non-critical task
       estimated_duration_us: 800000        # Estimated duration (800ms)
+      cpu_affinity: 2
       parameters:
         mode: "normal"
         data_size: "1024"
@@ -57,6 +59,7 @@ schedule:
       max_retries: 3
       critical: true                       # Critical task
       estimated_duration_us: 500000        # 500ms
+      cpu_affinity: 1
       depends_on: task_1                   # Wait for task_1 to complete
       parameters:
         mode: "slow"

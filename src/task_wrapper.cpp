@@ -1,5 +1,6 @@
 #include "task_wrapper.h"
 #include <iostream>
+#include <iomanip>
 #include <chrono>
 #include <pthread.h>
 
@@ -17,7 +18,8 @@ grpc::Status TaskServiceImpl::StartTask(
     const StartTaskRequest* request,
     StartTaskResponse* response) {
     
-    std::cout << "[Task " << wrapper_->get_task_id() 
+    std::cout << "[" << std::setw(13) << wrapper_->get_relative_time_ms() << " ms] "
+              << "[Task " << wrapper_->get_task_id() 
               << "] Received start command" << std::endl;
     
     if (wrapper_->get_state() != TASK_STATE_IDLE) {
@@ -42,7 +44,8 @@ grpc::Status TaskServiceImpl::StopTask(
     const StopTaskRequest* request,
     StopTaskResponse* response) {
     
-    std::cout << "[Task " << wrapper_->get_task_id() 
+    std::cout << "[" << std::setw(13) << wrapper_->get_relative_time_ms() << " ms] "
+              << "[Task " << wrapper_->get_task_id() 
               << "] Received stop command" << std::endl;
     
     // Request graceful stop
@@ -89,7 +92,8 @@ TaskWrapper::TaskWrapper(
     , running_(false)
     , stop_requested_(false)
     , start_time_us_(0)
-    , end_time_us_(0) {
+    , end_time_us_(0)
+    , creation_time_us_(get_current_time_us()) {
     
     service_ = std::make_unique<TaskServiceImpl>(this);
     
@@ -99,7 +103,8 @@ TaskWrapper::TaskWrapper(
         grpc::InsecureChannelCredentials());
     orchestrator_stub_ = OrchestratorService::NewStub(channel);
     
-    std::cout << "[Task " << task_id_ << "] Task wrapper created" << std::endl;
+    std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+              << "[Task " << task_id_ << "] Task wrapper created" << std::endl;
 }
 
 TaskWrapper::~TaskWrapper() {
@@ -110,7 +115,8 @@ void TaskWrapper::set_rt_config(const RTConfig& config) {
     std::lock_guard<std::mutex> lock(mutex_);
     rt_config_ = config;
     
-    std::cout << "[Task " << task_id_ << "] Real-time configuration set:" << std::endl;
+    std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+              << "[Task " << task_id_ << "] Real-time configuration set:" << std::endl;
     std::cout << "  Policy: " << RTUtils::policy_to_string(config.policy) << std::endl;
     std::cout << "  Priority: " << config.priority << std::endl;
     std::cout << "  CPU Affinity: " << (config.cpu_affinity >= 0 ? std::to_string(config.cpu_affinity) : "none") << std::endl;
@@ -118,11 +124,13 @@ void TaskWrapper::set_rt_config(const RTConfig& config) {
 
 void TaskWrapper::start() {
     if (running_.exchange(true)) {
-        std::cout << "[Task " << task_id_ << "] Already running" << std::endl;
+        std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                  << "[Task " << task_id_ << "] Already running" << std::endl;
         return;
     }
     
-    std::cout << "[Task " << task_id_ << "] Starting task wrapper on " 
+    std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+              << "[Task " << task_id_ << "] Starting task wrapper on " 
               << listen_address_ << std::endl;
     
     // Start gRPC server
@@ -131,7 +139,8 @@ void TaskWrapper::start() {
     builder.RegisterService(service_.get());
     
     server_ = builder.BuildAndStart();
-    std::cout << "[Task " << task_id_ << "] gRPC server listening on " 
+    std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+              << "[Task " << task_id_ << "] gRPC server listening on " 
               << listen_address_ << std::endl;
     
     state_ = TASK_STATE_IDLE;
@@ -142,7 +151,8 @@ void TaskWrapper::stop() {
         return;
     }
     
-    std::cout << "[Task " << task_id_ << "] Stopping task wrapper..." << std::endl;
+    std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+              << "[Task " << task_id_ << "] Stopping task wrapper..." << std::endl;
     
     stop_requested_ = true;
     
@@ -157,7 +167,8 @@ void TaskWrapper::stop() {
     }
     
     state_ = TASK_STATE_STOPPED;
-    std::cout << "[Task " << task_id_ << "] Task wrapper stopped" << std::endl;
+    std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+              << "[Task " << task_id_ << "] Task wrapper stopped" << std::endl;
 }
 
 void TaskWrapper::execute_task(const StartTaskRequest& request) {
@@ -170,10 +181,27 @@ void TaskWrapper::execute_task(const StartTaskRequest& request) {
 }
 
 void TaskWrapper::task_execution_thread(StartTaskRequest request) {
-    std::cout << "[Task " << task_id_ << "] Starting task execution" << std::endl;
+    std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+              << "[Task " << task_id_ << "] Starting task execution" << std::endl;
     
-    // Apply real-time configuration to execution thread
-    if (rt_config_.policy != RT_POLICY_NONE) {
+    // Apply real-time configuration from request (if specified)
+    if (request.rt_policy() != "none" && !request.rt_policy().empty()) {
+        RTConfig rt_config;
+        rt_config.policy = RTUtils::string_to_policy(request.rt_policy());
+        rt_config.priority = request.rt_priority();
+        rt_config.cpu_affinity = request.cpu_affinity();
+        
+        std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                  << "[Task " << task_id_ << "] Applying RT config: policy=" 
+                  << request.rt_policy() << ", priority=" << request.rt_priority()
+                  << ", cpu_affinity=" << request.cpu_affinity() << std::endl;
+        
+        if (!RTUtils::apply_rt_config(rt_config)) {
+            std::cerr << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                      << "[Task " << task_id_ << "] Warning: Failed to apply RT configuration" << std::endl;
+        }
+    } else if (rt_config_.policy != RT_POLICY_NONE) {
+        // Fallback to wrapper-level RT config if no request-level config
         RTUtils::apply_rt_config(rt_config_);
     }
     
@@ -202,17 +230,20 @@ void TaskWrapper::task_execution_thread(StartTaskRequest request) {
             result = TASK_RESULT_SUCCESS;
         }
         
-        std::cout << "[Task " << task_id_ << "] Task execution completed successfully" 
+        std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                  << "[Task " << task_id_ << "] Task execution completed successfully" 
                   << std::endl;
     } catch (const std::exception& e) {
         result = TASK_RESULT_FAILURE;
         error_message = std::string("Exception: ") + e.what();
-        std::cerr << "[Task " << task_id_ << "] Task execution failed: " 
+        std::cerr << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                  << "[Task " << task_id_ << "] Task execution failed: " 
                   << error_message << std::endl;
     } catch (...) {
         result = TASK_RESULT_FAILURE;
         error_message = "Unknown exception";
-        std::cerr << "[Task " << task_id_ << "] Task execution failed with unknown exception" 
+        std::cerr << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                  << "[Task " << task_id_ << "] Task execution failed with unknown exception" 
                   << std::endl;
     }
     
@@ -234,7 +265,8 @@ void TaskWrapper::task_execution_thread(StartTaskRequest request) {
 }
 
 void TaskWrapper::notify_orchestrator_end(TaskResult result, const std::string& error_msg) {
-    std::cout << "[Task " << task_id_ << "] Notifying orchestrator of task end" 
+    std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+              << "[Task " << task_id_ << "] Notifying orchestrator of task end" 
               << std::endl;
     
     TaskEndNotification notification;
@@ -255,10 +287,12 @@ void TaskWrapper::notify_orchestrator_end(TaskResult result, const std::string& 
     grpc::Status status = orchestrator_stub_->NotifyTaskEnd(&context, notification, &response);
     
     if (status.ok() && response.acknowledged()) {
-        std::cout << "[Task " << task_id_ << "] Orchestrator acknowledged task end" 
+        std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                  << "[Task " << task_id_ << "] Orchestrator acknowledged task end" 
                   << std::endl;
     } else {
-        std::cerr << "[Task " << task_id_ << "] Failed to notify orchestrator: " 
+        std::cerr << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                  << "[Task " << task_id_ << "] Failed to notify orchestrator: " 
                   << status.error_message() << std::endl;
     }
 }
@@ -278,6 +312,12 @@ int64_t TaskWrapper::get_elapsed_time_us() const {
 int64_t TaskWrapper::get_current_time_us() const {
     return std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
+}
+
+int64_t TaskWrapper::get_relative_time_ms() const {
+    // Return absolute timestamp in milliseconds for synchronization
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 } // namespace orchestrator

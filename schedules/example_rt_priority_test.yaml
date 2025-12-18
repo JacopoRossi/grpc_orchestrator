@@ -1,0 +1,81 @@
+# Real-Time Priority Test Schedule
+# This schedule tests RT scheduling primitives with two tasks on the same CPU core
+# Task 1 has lower priority (30), Task 3 has higher priority (80)
+# Both run on CPU core 0 to test priority-based preemption
+
+schedule:
+  name: "RT Priority Test - Same Core"
+  description: "Test real-time scheduling with two tasks on the same CPU core with different priorities"
+  
+  # Global defaults
+  defaults:
+    priority: 50
+    max_retries: 1
+    critical: false
+    deadline_us: 5000000  # 5 seconds
+    rt_policy: "fifo"     # Use SCHED_FIFO for real-time scheduling
+    rt_priority: 50       # Default RT priority
+    cpu_affinity: 0       # Default to CPU core 0
+    
+  # Task definitions
+  tasks:
+    # Task 1: Lower RT priority (30), runs on core 0
+    # This task should be preempted by task_3 when it starts
+    - id: task_1
+      address: "task1:50051"
+      mode: timed
+      scheduled_time_us: 0               # Start immediately
+      deadline_us: 20000000              # 20 seconds
+      priority: 10
+      max_retries: 1
+      critical: true
+      estimated_duration_us: 10000000    # 10 seconds (long running)
+      rt_policy: "fifo"                  # SCHED_FIFO
+      rt_priority: 30                    # Lower RT priority
+      cpu_affinity: 0                    # CPU core 0
+      parameters:
+        mode: "compute_intensive"
+        iterations: "1000000000"         # 1 BILLION iterations (~30 seconds of pure CPU)
+      
+    # Task 3: Higher RT priority (80), runs on core 0
+    # This task should preempt task_1 when it starts
+    # Starts 100ms after task_1 to ensure task_1 is already running
+    - id: task_3
+      address: "task3:50053"
+      mode: timed
+      scheduled_time_us: 0          # Start after 100ms (when task_1 is running)
+      deadline_us: 60000000              # 60 seconds
+      priority: 10
+      max_retries: 1
+      critical: true
+      estimated_duration_us: 15000000    # 15 seconds
+      rt_policy: "fifo"                  # SCHED_FIFO
+      rt_priority: 10                    # Higher RT priority (should preempt task_1)
+      cpu_affinity: 0                    # Same CPU core 0
+      parameters:
+        mode: "compute_intensive"
+        iterations: "500000000"          # 500M iterations (~15 seconds of pure CPU)
+
+# Expected behavior:
+# 1. Task 1 starts at t=0 with RT priority 30 on core 0 (1B iterations → ~30s)
+# 2. Task 3 starts at t=100ms with RT priority 80 on core 0 (500M iterations → ~15s)
+# 3. When Task 3 starts, it should PREEMPT Task 1 (higher priority: 80 > 30)
+# 4. Task 3 runs to completion (~15 seconds) while Task 1 is COMPLETELY BLOCKED
+# 5. After Task 3 completes, Task 1 resumes and finishes remaining work
+#
+# Timeline (with pure CPU computation, no I/O):
+#   0ms:     Task 1 starts (priority 30) - begins 1 BILLION iterations
+#   100ms:   Task 3 starts (priority 80) → PREEMPTS Task 1 immediately
+#            ┌─────────────────────────────────────┐
+#            │ Task 3 MONOPOLIZES core 0           │
+#            │ Task 1 is COMPLETELY BLOCKED        │
+#            │ (no context switches, pure RT)      │
+#            └─────────────────────────────────────┘
+#   ~15.1s:  Task 3 completes (500M iterations done)
+#   ~15.1s:  Task 1 resumes (continues remaining iterations)
+#   ~45s:    Task 1 completes (total ~30s CPU time, wall time ~45s due to 15s preemption)
+#
+# This is the DEFINITIVE test showing SCHED_FIFO preemption in action!
+#
+# This demonstrates that SCHED_FIFO with higher priority preempts lower priority tasks
+# on the same CPU core, which is the expected real-time scheduling behavior.

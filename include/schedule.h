@@ -29,6 +29,11 @@ struct ScheduledTask {
     int64_t estimated_duration_us;     // Estimated execution time
     int32_t max_retries;               // Maximum retry attempts
     bool critical;                     // Is this a critical task?
+    
+    // Real-time configuration
+    std::string rt_policy;             // RT scheduling policy: "none", "fifo", "rr", "deadline"
+    int32_t rt_priority;               // RT priority (1-99, 99 = highest)
+    int32_t cpu_affinity;              // CPU core to bind to (-1 = no affinity)
 };
 
 // Represents the complete schedule

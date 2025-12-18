@@ -1,6 +1,7 @@
 #include "task_wrapper.h"
 #include "rt_utils.h"
 #include <iostream>
+#include <iomanip>
 #include <thread>
 #include <chrono>
 #include <signal.h>
@@ -10,6 +11,13 @@ using namespace orchestrator;
 
 // Global task wrapper pointer for signal handling
 TaskWrapper* g_task_wrapper = nullptr;
+
+// Helper function to get absolute timestamp in milliseconds (for synchronization with orchestrator)
+int64_t get_absolute_time_ms() {
+    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    return now;
+}
 
 void signal_handler(int signal) {
     std::cout << "\n[Main] Received signal " << signal << ", shutting down..." << std::endl;
@@ -21,7 +29,8 @@ void signal_handler(int signal) {
 
 // Example task execution function
 TaskResult example_task_function(const std::map<std::string, std::string>& params) {
-    std::cout << "[Task Function] Starting execution with parameters:" << std::endl;
+    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+              << "[Task Function] Starting execution with parameters:" << std::endl;
     
     for (const auto& param : params) {
         std::cout << "  " << param.first << " = " << param.second << std::endl;
@@ -35,7 +44,9 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
     }
     
     // Print custom string based on task_id
-    std::cout << "\n========================================" << std::endl;
+    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+              << "\n========================================" << std::endl;
+    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] ";
     if (task_id == "task_1") {
         std::cout << "/ciao" << std::endl;
     } else if (task_id == "task_2") {
@@ -45,7 +56,8 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
     } else {
         std::cout << "Unknown task: " << task_id << std::endl;
     }
-    std::cout << "========================================\n" << std::endl;
+    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+              << "========================================\n" << std::endl;
     
     // Simulate some work
     int duration_ms = 500;  // Default duration
@@ -55,20 +67,65 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
         try {
             duration_ms = std::stoi(it->second);
         } catch (...) {
-            std::cerr << "[Task Function] Invalid duration_ms parameter" << std::endl;
+            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task Function] Invalid duration_ms parameter" << std::endl;
         }
     }
     
-    std::cout << "[Task Function] Simulating work for " << duration_ms << " ms..." << std::endl;
-    
-    // Simulate work in chunks to allow for interruption
-    int chunks = duration_ms / 100;
-    for (int i = 0; i < chunks; i++) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        std::cout << "[Task Function] Progress: " << ((i + 1) * 100 / chunks) << "%" << std::endl;
+    // Check if we should do pure computation (iterations) or sleep-based work
+    auto iter_it = params.find("iterations");
+    if (iter_it != params.end()) {
+        // Pure computation mode - no I/O to avoid context switches
+        long long iterations = 0;
+        try {
+            iterations = std::stoll(iter_it->second);
+        } catch (...) {
+            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task Function] Invalid iterations parameter" << std::endl;
+            return TASK_RESULT_FAILURE;
+        }
+        
+        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                  << "[Task Function] Running " << iterations << " iterations (pure computation)..." << std::endl;
+        
+        // Pure CPU-bound computation - no I/O, no sleep
+        volatile long long sum = 0;
+        for (long long i = 0; i < iterations; i++) {
+            sum += i * i;  // Some computation to prevent optimization
+        }
+        
+        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                  << "[Task Function] Computation completed (sum=" << sum << ")" << std::endl;
+    } else {
+        // Sleep-based mode (original behavior)
+        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                  << "[Task Function] Simulating work for " << duration_ms << " ms..." << std::endl;
+        
+        // Simulate work in chunks to allow for interruption
+        int chunks = duration_ms / 100;
+        for (int i = 0; i < chunks; i++) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task Function] Progress: " << ((i + 1) * 100 / chunks) << "%" << std::endl;
+        }
+            // Print custom string based on task_id
+        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                  << "\n========================================" << std::endl;
+        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] ";
+        if (task_id == "task_1") {
+            std::cout << "/ciao" << std::endl;
+        } else if (task_id == "task_2") {
+            std::cout << " sono " << std::endl;
+        } else if (task_id == "task_3") {
+            std::cout << " Jacopo/" << std::endl;
+        } else {
+            std::cout << "Unknown task: " << task_id << std::endl;
+        }
+        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                  << "========================================\n" << std::endl;
+        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                  << "[Task Function] Work completed successfully" << std::endl;
     }
-    
-    std::cout << "[Task Function] Work completed successfully" << std::endl;
     
     return TASK_RESULT_SUCCESS;
 }

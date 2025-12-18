@@ -144,14 +144,15 @@ bool RTUtils::apply_rt_config(pthread_t thread, const RTConfig& config) {
         prefault_stack(stack_size);
     }
     
-    // Set CPU affinity
+    // Set CPU affinity BEFORE RT policy (important!)
+    // Setting affinity after RT policy may fail on some systems
     if (config.cpu_affinity >= 0) {
         if (!set_cpu_affinity(thread, config.cpu_affinity)) {
             success = false;
         }
     }
     
-    // Set real-time scheduling policy
+    // Set real-time scheduling policy AFTER CPU affinity
     if (config.policy != RT_POLICY_NONE) {
         if (!set_thread_realtime(thread, config.policy, config.priority)) {
             success = false;

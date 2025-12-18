@@ -70,6 +70,9 @@ public:
     // Get execution statistics
     int64_t get_start_time_us() const { return start_time_us_; }
     int64_t get_elapsed_time_us() const;
+    
+    // Get relative time since wrapper creation (for logging)
+    int64_t get_relative_time_ms() const;
 
 private:
     // Task execution thread function
@@ -105,6 +108,7 @@ private:
     // Timing
     int64_t start_time_us_;
     int64_t end_time_us_;
+    int64_t creation_time_us_;  // Time when wrapper was created (for logging)
     
     // Thread safety
     mutable std::mutex mutex_;

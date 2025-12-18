@@ -30,6 +30,9 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
             int default_max_retries = 3;
             bool default_critical = false;
             int64_t default_deadline_us = 1000000;
+            std::string default_rt_policy = "none";
+            int default_rt_priority = 50;
+            int default_cpu_affinity = -1;
             
             if (sched["defaults"]) {
                 YAML::Node defaults = sched["defaults"];
@@ -37,6 +40,9 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
                 if (defaults["max_retries"]) default_max_retries = defaults["max_retries"].as<int>();
                 if (defaults["critical"]) default_critical = defaults["critical"].as<bool>();
                 if (defaults["deadline_us"]) default_deadline_us = defaults["deadline_us"].as<int64_t>();
+                if (defaults["rt_policy"]) default_rt_policy = defaults["rt_policy"].as<std::string>();
+                if (defaults["rt_priority"]) default_rt_priority = defaults["rt_priority"].as<int>();
+                if (defaults["cpu_affinity"]) default_cpu_affinity = defaults["cpu_affinity"].as<int>();
             }
             
             // Check if running in Docker
@@ -80,6 +86,11 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
                     task.critical = task_node["critical"] ? task_node["critical"].as<bool>() : default_critical;
                     task.deadline_us = task_node["deadline_us"] ? task_node["deadline_us"].as<int64_t>() : default_deadline_us;
                     task.estimated_duration_us = task_node["estimated_duration_us"] ? task_node["estimated_duration_us"].as<int64_t>() : 1000000;
+                    
+                    // Real-time configuration
+                    task.rt_policy = task_node["rt_policy"] ? task_node["rt_policy"].as<std::string>() : default_rt_policy;
+                    task.rt_priority = task_node["rt_priority"] ? task_node["rt_priority"].as<int>() : default_rt_priority;
+                    task.cpu_affinity = task_node["cpu_affinity"] ? task_node["cpu_affinity"].as<int>() : default_cpu_affinity;
                     
                     // Parameters
                     if (task_node["parameters"]) {
@@ -154,6 +165,9 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     task1.critical = true;
     task1.execution_mode = TASK_MODE_SEQUENTIAL;  // Sequential
     task1.wait_for_task_id = "";        // No dependency
+    task1.rt_policy = "none";
+    task1.rt_priority = 50;
+    task1.cpu_affinity = -1;
     
     // Task 2: Execute at 2 seconds (timed mode)
     ScheduledTask task2;
@@ -170,6 +184,9 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     task2.critical = false;
     task2.execution_mode = TASK_MODE_TIMED;  // Timed execution
     task2.wait_for_task_id = "";        // No dependency
+    task2.rt_policy = "none";
+    task2.rt_priority = 50;
+    task2.cpu_affinity = -1;
     
     // Task 3: Execute after task_1 completes (sequential mode)
     ScheduledTask task3;
@@ -186,6 +203,9 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     task3.critical = true;
     task3.execution_mode = TASK_MODE_SEQUENTIAL;  // Sequential
     task3.wait_for_task_id = "task_1";  // Wait for task_1 to complete
+    task3.rt_policy = "none";
+    task3.rt_priority = 50;
+    task3.cpu_affinity = -1;
     
     schedule.tasks.push_back(task1);
     schedule.tasks.push_back(task2);

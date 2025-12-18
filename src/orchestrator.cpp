@@ -1,5 +1,6 @@
 #include "orchestrator.h"
 #include <iostream>
+#include <iomanip>
 #include <chrono>
 #include <algorithm>
 #include <pthread.h>
@@ -18,8 +19,13 @@ grpc::Status OrchestratorServiceImpl::NotifyTaskEnd(
     const TaskEndNotification* request,
     TaskEndResponse* response) {
     
-    std::cout << "[Orchestrator] Received task end notification: " 
-              << request->task_id() << std::endl;
+    int64_t absolute_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    std::cout << "[" << std::setw(13) << absolute_time_ms << " ms] "
+              << "← Task " << request->task_id() 
+              << " completed (result: " << request->result() 
+              << ", duration: " << request->execution_duration_us() / 1000.0 << " ms)" 
+              << std::endl;
     
     orchestrator_->on_task_end(*request);
     
@@ -177,10 +183,7 @@ void Orchestrator::on_task_end(const TaskEndNotification& notification) {
     exec.result = notification.result();
     exec.error_message = notification.error_message();
     
-    std::cout << "[Orchestrator] Task " << notification.task_id() 
-              << " completed with result: " << notification.result()
-              << " (duration: " << notification.execution_duration_us() << " us)"
-              << std::endl;
+    // Log already printed in NotifyTaskEnd
     
     // Move to completed tasks
     completed_tasks_.push_back(exec);
@@ -211,12 +214,13 @@ void Orchestrator::scheduler_loop() {
     }
     
     // PHASE 1: Launch all TIMED tasks immediately (they will wait internally for their scheduled time)
-    std::cout << "\n[Orchestrator] === PHASE 1: Launching TIMED tasks ===" << std::endl;
-    for (size_t i = 0; i < schedule_.tasks.size() && running_; i++) {
-        const ScheduledTask& task = schedule_.tasks[i];
-        
+    std::cout << "\n[Orchestrator] === PHASE 1: Launching TIMED tasks ===\n" << std::endl;
+    for (const ScheduledTask& task : schedule_.tasks) {
         if (task.execution_mode == TASK_MODE_TIMED) {
-            std::cout << "\n[Orchestrator] Launching TIMED task: " << task.task_id 
+            int64_t absolute_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            std::cout << "[" << std::setw(13) << absolute_time_ms << " ms] "
+                      << "→ Launching TIMED task: " << task.task_id 
                       << " (scheduled at " << task.scheduled_time_us / 1000 << " ms)" << std::endl;
             
             // Launch task on separate thread
@@ -233,35 +237,26 @@ void Orchestrator::scheduler_loop() {
                 int64_t wait_time_us = task.scheduled_time_us - current_time;
                 
                 if (wait_time_us > 0) {
-                    std::cout << "[Orchestrator] Task " << task.task_id << " waiting " 
-                              << wait_time_us / 1000 << " ms until scheduled time..." << std::endl;
                     std::this_thread::sleep_for(std::chrono::microseconds(wait_time_us));
                 }
-                
-                std::cout << "[Orchestrator] Task " << task.task_id << " starting at scheduled time" << std::endl;
                 execute_task(task);
             }).detach();
         }
     }
     
     // PHASE 2: Process SEQUENTIAL tasks in order
-    std::cout << "\n[Orchestrator] === PHASE 2: Processing SEQUENTIAL tasks ===" << std::endl;
+    std::cout << "\n[Orchestrator] === PHASE 2: Processing SEQUENTIAL tasks ===\n" << std::endl;
     for (size_t i = 0; i < schedule_.tasks.size() && running_; i++) {
         const ScheduledTask& task = schedule_.tasks[i];
         
         if (task.execution_mode == TASK_MODE_SEQUENTIAL) {
-            std::cout << "\n[Orchestrator] ========================================" << std::endl;
-            std::cout << "[Orchestrator] Processing SEQUENTIAL task: " << task.task_id;
-            if (!task.wait_for_task_id.empty()) {
-                std::cout << " (waiting for " << task.wait_for_task_id << ")";
-            }
-            std::cout << std::endl;
-            std::cout << "[Orchestrator] ========================================\n" << std::endl;
             
             // Check if we need to wait for a dependency
             if (!task.wait_for_task_id.empty()) {
-                std::cout << "[Orchestrator] Waiting for task " << task.wait_for_task_id 
-                          << " to complete..." << std::endl;
+                int64_t wait_start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+                std::cout << "[" << std::setw(13) << wait_start_ms << " ms] "
+                          << "⏸ Waiting for " << task.wait_for_task_id << " to complete..." << std::endl;
                 
                 std::unique_lock<std::mutex> lock(mutex_);
                 task_end_cv_.wait(lock, [this, &task]() {
@@ -273,8 +268,21 @@ void Orchestrator::scheduler_loop() {
                     break;
                 }
                 
-                std::cout << "[Orchestrator] Dependency satisfied, starting task..." << std::endl;
+                int64_t wait_end_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+                std::cout << "[" << std::setw(13) << wait_end_ms << " ms] "
+                          << "✓ Dependency satisfied, " << task.wait_for_task_id << " completed" << std::endl;
             }
+            
+            // Log task launch
+            int64_t absolute_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            std::cout << "[" << std::setw(13) << absolute_time_ms << " ms] "
+                      << "→ Launching SEQUENTIAL task: " << task.task_id;
+            if (!task.wait_for_task_id.empty()) {
+                std::cout << " (after " << task.wait_for_task_id << ")";
+            }
+            std::cout << std::endl;
             
             // Launch task on separate thread
             {
@@ -307,13 +315,10 @@ void Orchestrator::scheduler_loop() {
                     break;
                 }
             }
-            
-            std::cout << "\n[Orchestrator] Task " << task.task_id << " completed" << std::endl;
         }
     }
     
     // Wait for all remaining tasks to complete
-    std::cout << "\n[Orchestrator] Waiting for all tasks to complete..." << std::endl;
     std::unique_lock<std::mutex> lock(mutex_);
     task_end_cv_.wait(lock, [this]() {
         return pending_tasks_ == 0 || !running_;
@@ -352,6 +357,9 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
     request.set_scheduled_time_us(task.scheduled_time_us);
     request.set_deadline_us(task.deadline_us);
     request.set_priority(task.priority);
+    request.set_rt_policy(task.rt_policy);
+    request.set_rt_priority(task.rt_priority);
+    request.set_cpu_affinity(task.cpu_affinity);
     
     for (const auto& param : task.parameters) {
         (*request.mutable_parameters())[param.first] = param.second;
@@ -368,8 +376,7 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
     grpc::Status status = stub->StartTask(&context, request, &response);
     
     if (status.ok() && response.success()) {
-        std::cout << "[Orchestrator] Task " << task.task_id 
-                  << " started successfully" << std::endl;
+        // Task started successfully - no log needed here, launch log already printed
         
         // Update task execution state
         std::lock_guard<std::mutex> lock(mutex_);
