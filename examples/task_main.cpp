@@ -28,7 +28,8 @@ void signal_handler(int signal) {
 }
 
 // Example task execution function
-TaskResult example_task_function(const std::map<std::string, std::string>& params) {
+TaskResult example_task_function(const std::map<std::string, std::string>& params, 
+                                  std::map<std::string, std::string>& output) {
     std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
               << "[Task Function] Starting execution with parameters:" << std::endl;
     
@@ -36,96 +37,125 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
         std::cout << "  " << param.first << " = " << param.second << std::endl;
     }
     
-    // Get task_id to determine which string to print
+    // Get task_id to determine which logic to execute
     std::string task_id;
     auto task_id_it = params.find("task_id");
     if (task_id_it != params.end()) {
         task_id = task_id_it->second;
     }
     
-    // Print custom string based on task_id
+    // Clear previous output
+    output.clear();
+    
+    // Execute task-specific logic
     std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
               << "\n========================================" << std::endl;
-    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] ";
+    
     if (task_id == "task_1") {
-        std::cout << "/ciao" << std::endl;
-    } else if (task_id == "task_2") {
-        std::cout << " sono " << std::endl;
-    } else if (task_id == "task_3") {
-        std::cout << " Jacopo/" << std::endl;
-    } else {
-        std::cout << "Unknown task: " << task_id << std::endl;
-    }
-    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-              << "========================================\n" << std::endl;
-    
-    // Simulate some work
-    int duration_ms = 500;  // Default duration
-    
-    auto it = params.find("duration_ms");
-    if (it != params.end()) {
-        try {
-            duration_ms = std::stoi(it->second);
-        } catch (...) {
+        // Task 1: input = number, output = number * 5
+        auto input_it = params.find("input");
+        if (input_it == params.end()) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task Function] Invalid duration_ms parameter" << std::endl;
-        }
-    }
-    
-    // Check if we should do pure computation (iterations) or sleep-based work
-    auto iter_it = params.find("iterations");
-    if (iter_it != params.end()) {
-        // Pure computation mode - no I/O to avoid context switches
-        long long iterations = 0;
-        try {
-            iterations = std::stoll(iter_it->second);
-        } catch (...) {
-            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task Function] Invalid iterations parameter" << std::endl;
+                      << "[Task 1] ERROR: Missing 'input' parameter" << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
-        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                  << "[Task Function] Running " << iterations << " iterations (pure computation)..." << std::endl;
-        
-        // Pure CPU-bound computation - no I/O, no sleep
-        volatile long long sum = 0;
-        for (long long i = 0; i < iterations; i++) {
-            sum += i * i;  // Some computation to prevent optimization
-        }
-        
-        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                  << "[Task Function] Computation completed (sum=" << sum << ")" << std::endl;
-    } else {
-        // Sleep-based mode (original behavior)
-        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                  << "[Task Function] Simulating work for " << duration_ms << " ms..." << std::endl;
-        
-        // Simulate work in chunks to allow for interruption
-        int chunks = duration_ms / 100;
-        for (int i = 0; i < chunks; i++) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        try {
+            int input_value = std::stoi(input_it->second);
+            int output_value = input_value * 5;
+            
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task Function] Progress: " << ((i + 1) * 100 / chunks) << "%" << std::endl;
+                      << "[Task 1] Input: " << input_value << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 1] Output: " << input_value << " * 5 = " << output_value << std::endl;
+            
+            output["result"] = std::to_string(output_value);
+            
+        } catch (const std::exception& e) {
+            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 1] ERROR: Invalid input value: " << e.what() << std::endl;
+            return TASK_RESULT_FAILURE;
         }
-            // Print custom string based on task_id
-        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                  << "\n========================================" << std::endl;
-        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] ";
-        if (task_id == "task_1") {
-            std::cout << "/ciao" << std::endl;
-        } else if (task_id == "task_2") {
-            std::cout << " sono " << std::endl;
-        } else if (task_id == "task_3") {
-            std::cout << " Jacopo/" << std::endl;
-        } else {
-            std::cout << "Unknown task: " << task_id << std::endl;
+        
+    } else if (task_id == "task_2") {
+        // Task 2: input = number, output = number + 1
+        auto input_it = params.find("input");
+        if (input_it == params.end()) {
+            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 2] ERROR: Missing 'input' parameter" << std::endl;
+            return TASK_RESULT_FAILURE;
         }
+        
+        try {
+            int input_value = std::stoi(input_it->second);
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+            int output_value = input_value + 1;
+            
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 2] Input: " << input_value << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 2] Output: " << input_value << " + 1 = " << output_value << std::endl;
+            
+            output["result"] = std::to_string(output_value);
+            
+        } catch (const std::exception& e) {
+            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 2] ERROR: Invalid input value: " << e.what() << std::endl;
+            return TASK_RESULT_FAILURE;
+        }
+        
+    } else if (task_id == "task_3") {
+        // Task 3: input1 = output from task_2 (dep_result), input2 = another number, output = input1 * input2
+        auto input1_it = params.find("dep_result");  // Output from dependent task
+        auto input2_it = params.find("input2");
+        
+        if (input1_it == params.end() || input2_it == params.end()) {
+            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3] ERROR: Missing 'dep_result' or 'input2' parameter" << std::endl;
+            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3] Available parameters:" << std::endl;
+            for (const auto& param : params) {
+                std::cerr << "  " << param.first << " = " << param.second << std::endl;
+            }
+            return TASK_RESULT_FAILURE;
+        }
+        
+        try {
+            int input1_value = std::stoi(input1_it->second);
+            int input2_value = std::stoi(input2_it->second);
+            
+            // Sleep di 5 secondi
+            
+            std::this_thread::sleep_for(std::chrono::seconds(10));
+            
+            
+            int output_value = input1_value * input2_value;
+            
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3] Input1 (from task_2): " << input1_value << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3] Input2: " << input2_value << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3] Output: " << input1_value << " * " << input2_value << " = " << output_value << std::endl;
+            
+            output["result"] = std::to_string(output_value);
+            
+        } catch (const std::exception& e) {
+            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3] ERROR: Invalid input values: " << e.what() << std::endl;
+            return TASK_RESULT_FAILURE;
+        }
+        
+    } else {
         std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                  << "========================================\n" << std::endl;
-        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                  << "[Task Function] Work completed successfully" << std::endl;
+                  << "Unknown task: " << task_id << std::endl;
     }
+    
+    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+              << "========================================\n" << std::endl;
+    
+    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+              << "[Task Function] Task completed successfully" << std::endl;
     
     return TASK_RESULT_SUCCESS;
 }

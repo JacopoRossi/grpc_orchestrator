@@ -183,6 +183,20 @@ void Orchestrator::on_task_end(const TaskEndNotification& notification) {
     exec.result = notification.result();
     exec.error_message = notification.error_message();
     
+    // Store output data
+    for (const auto& output : notification.output_data()) {
+        exec.output_data[output.first] = output.second;
+    }
+    task_outputs_[notification.task_id()] = exec.output_data;
+    
+    // Log output data if present
+    if (!exec.output_data.empty()) {
+        std::cout << "[Orchestrator] Task " << notification.task_id() << " output:" << std::endl;
+        for (const auto& output : exec.output_data) {
+            std::cout << "  " << output.first << " = " << output.second << std::endl;
+        }
+    }
+    
     // Log already printed in NotifyTaskEnd
     
     // Move to completed tasks
@@ -361,8 +375,23 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
     request.set_rt_priority(task.rt_priority);
     request.set_cpu_affinity(task.cpu_affinity);
     
+    // Copy task parameters
     for (const auto& param : task.parameters) {
         (*request.mutable_parameters())[param.first] = param.second;
+    }
+    
+    // Add output from dependent task if available
+    if (!task.wait_for_task_id.empty()) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto output_it = task_outputs_.find(task.wait_for_task_id);
+        if (output_it != task_outputs_.end()) {
+            std::cout << "[Orchestrator] Passing output from " << task.wait_for_task_id 
+                      << " to " << task.task_id << std::endl;
+            for (const auto& output : output_it->second) {
+                // Add output with a prefix to distinguish from regular parameters
+                (*request.mutable_parameters())["dep_" + output.first] = output.second;
+            }
+        }
     }
     
     StartTaskResponse response;

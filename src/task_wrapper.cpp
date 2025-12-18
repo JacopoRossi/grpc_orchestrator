@@ -222,9 +222,10 @@ void TaskWrapper::task_execution_thread(StartTaskRequest request) {
     // Execute the actual task
     TaskResult result = TASK_RESULT_UNKNOWN;
     std::string error_message;
+    std::map<std::string, std::string> output_data;
     
     try {
-        result = execution_callback_(params);
+        result = execution_callback_(params, output_data);
         
         if (result == TASK_RESULT_UNKNOWN) {
             result = TASK_RESULT_SUCCESS;
@@ -258,13 +259,14 @@ void TaskWrapper::task_execution_thread(StartTaskRequest request) {
     state_ = TASK_STATE_COMPLETED;
     
     // Notify orchestrator
-    notify_orchestrator_end(result, error_message);
+    notify_orchestrator_end(result, error_message, output_data);
     
     // Return to idle state
     state_ = TASK_STATE_IDLE;
 }
 
-void TaskWrapper::notify_orchestrator_end(TaskResult result, const std::string& error_msg) {
+void TaskWrapper::notify_orchestrator_end(TaskResult result, const std::string& error_msg, 
+                                          const std::map<std::string, std::string>& output_data) {
     std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
               << "[Task " << task_id_ << "] Notifying orchestrator of task end" 
               << std::endl;
@@ -276,6 +278,11 @@ void TaskWrapper::notify_orchestrator_end(TaskResult result, const std::string& 
     notification.set_end_time_us(end_time_us_);
     notification.set_execution_duration_us(end_time_us_ - start_time_us_);
     notification.set_error_message(error_msg);
+    
+    // Add output data
+    for (const auto& output : output_data) {
+        (*notification.mutable_output_data())[output.first] = output.second;
+    }
     
     TaskEndResponse response;
     grpc::ClientContext context;

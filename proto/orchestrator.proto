@@ -105,6 +105,7 @@ message TaskEndNotification {
   int64 execution_duration_us = 5;
   string error_message = 6;              // Empty if success
   map<string, string> metrics = 7;       // Additional metrics
+  map<string, string> output_data = 8;   // Output data to be passed to dependent tasks
 }
 
 message TaskEndResponse {
