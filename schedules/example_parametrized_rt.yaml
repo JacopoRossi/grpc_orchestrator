@@ -20,7 +20,7 @@ schedule:
     # Input: 10, Output: 10 * 5 = 50
     - id: task_1
       address: "task1:50051"
-      mode: sequential
+      mode: timed
       scheduled_time_us: 0
       deadline_us: 3000000
       priority: 10
@@ -28,8 +28,8 @@ schedule:
       critical: true
       estimated_duration_us: 500000
       rt_policy: "fifo"                  # SCHED_FIFO
-      rt_priority: 30                    # Lower RT priority
-      cpu_affinity: 0                    # CPU core 0
+      rt_priority: 50                    # Lower RT priority
+      cpu_affinity: 1                    # CPU core 0
       parameters:
         input: "11"
       
@@ -38,23 +38,6 @@ schedule:
     - id: task_2
       address: "task2:50052"
       mode: timed
-      scheduled_time_us: 2000000
-      deadline_us: 3000000
-      priority: 10
-      max_retries: 1
-      critical: true
-      estimated_duration_us: 500000
-      rt_policy: "fifo"                  # SCHED_FIFO
-      rt_priority: 30                    # Lower RT priority
-      cpu_affinity: 1                    # CPU core 0
-      parameters:
-        input: "9"
-      
-    # Task 3: Sequential, depends on task_2
-    # Input1: from task_2 (6), Input2: 7, Output: 6 * 7 = 42
-    - id: task_3
-      address: "task3:50053"
-      mode: sequential
       scheduled_time_us: 0
       deadline_us: 3000000
       priority: 10
@@ -62,8 +45,8 @@ schedule:
       critical: true
       estimated_duration_us: 500000
       rt_policy: "fifo"                  # SCHED_FIFO
-      rt_priority: 30                    # Lower RT priority
-      cpu_affinity: 2                    # CPU core 0
-      depends_on: task_2
+      rt_priority: 7                    # Lower RT priority
+      cpu_affinity: 1                    # CPU core 0
       parameters:
-        input2: "22"
+        input: "9"
+      

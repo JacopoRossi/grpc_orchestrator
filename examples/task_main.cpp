@@ -62,10 +62,24 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
         
         try {
             int input_value = std::stoi(input_it->second);
-            int output_value = input_value * 5;
+            
             
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 1] Input: " << input_value << std::endl;
+            
+            // Simula carico computazionale con loop
+            long long prev = 0, curr = 1, sum = 0;
+            for (int i = 0; i < 100000; i++) {
+                sum = prev + curr;
+                prev = curr;
+                curr = sum;
+                if (i % 1000 == 0) {
+                    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                              << "[Task 1] Loop iteration " << i << ", sum = " << sum << std::endl;
+                }
+            }
+            
+            int output_value = input_value * 5;
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 1] Output: " << input_value << " * 5 = " << output_value << std::endl;
             
@@ -87,12 +101,26 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
         }
         
         try {
-            int input_value = std::stoi(input_it->second);
-            std::this_thread::sleep_for(std::chrono::seconds(10));
-            int output_value = input_value + 1;
-            
+            int input_value = std::stoi(input_it->second);   
+
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 2] Input: " << input_value << std::endl;
+            
+            // Simula carico computazionale con loop
+            long long prev = 0, curr = 1, sum = 0;
+            for (int i = 0; i < 100000; i++) {
+                sum = prev + curr;
+                prev = curr;
+                curr = sum;
+                if (i % 1000 == 0) {
+                    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                              << "[Task 2] Loop iteration " << i << ", sum = " << sum << std::endl;
+                }
+            }
+            
+            int output_value = input_value + 1;
+            
+            
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 2] Output: " << input_value << " + 1 = " << output_value << std::endl;
             

@@ -13,7 +13,7 @@ services:
     command: >
       ./orchestrator_main
       --address 0.0.0.0:50050
-      --schedule schedules/example_parametrized.yaml
+      --schedule schedules/example_parametrized_rt.yaml
       --policy fifo
       --priority 80
       --cpu-affinity 0
