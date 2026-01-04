@@ -370,7 +370,6 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
     request.set_task_id(task.task_id);
     request.set_scheduled_time_us(task.scheduled_time_us);
     request.set_deadline_us(task.deadline_us);
-    request.set_priority(task.priority);
     request.set_rt_policy(task.rt_policy);
     request.set_rt_priority(task.rt_priority);
     request.set_cpu_affinity(task.cpu_affinity);

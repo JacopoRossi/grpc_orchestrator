@@ -9,9 +9,6 @@ schedule:
   
   # Global defaults
   defaults:
-    priority: 50
-    max_retries: 1
-    critical: false
     deadline_us: 5000000  # 5 seconds
     rt_policy: "fifo"     # Use SCHED_FIFO for real-time scheduling
     rt_priority: 50       # Default RT priority
@@ -26,9 +23,6 @@ schedule:
       mode: timed
       scheduled_time_us: 0               # Start immediately
       deadline_us: 20000000              # 20 seconds
-      priority: 10
-      max_retries: 1
-      critical: true
       estimated_duration_us: 10000000    # 10 seconds (long running)
       rt_policy: "fifo"                  # SCHED_FIFO
       rt_priority: 30                    # Lower RT priority
@@ -45,9 +39,6 @@ schedule:
       mode: timed
       scheduled_time_us: 0          # Start after 100ms (when task_1 is running)
       deadline_us: 60000000              # 60 seconds
-      priority: 10
-      max_retries: 1
-      critical: true
       estimated_duration_us: 15000000    # 15 seconds
       rt_policy: "fifo"                  # SCHED_FIFO
       rt_priority: 10                    # Higher RT priority (should preempt task_1)

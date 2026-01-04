@@ -20,15 +20,12 @@ struct ScheduledTask {
     std::string task_address;          // gRPC address (e.g., "localhost:50051")
     int64_t scheduled_time_us;         // Scheduled start time in microseconds
     int64_t deadline_us;               // Task deadline in microseconds
-    int32_t priority;                  // Task priority
     std::map<std::string, std::string> parameters;  // Task parameters
     TaskExecutionMode execution_mode;  // Sequential or timed execution
     std::string wait_for_task_id;      // Task ID to wait for (if sequential)
     
     // Optional metadata
     int64_t estimated_duration_us;     // Estimated execution time
-    int32_t max_retries;               // Maximum retry attempts
-    bool critical;                     // Is this a critical task?
     
     // Real-time configuration
     std::string rt_policy;             // RT scheduling policy: "none", "fifo", "rr", "deadline"

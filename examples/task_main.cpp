@@ -69,13 +69,14 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
             
             // Simula carico computazionale con loop
             long long prev = 0, curr = 1, sum = 0;
-            for (int i = 0; i < 100000; i++) {
+            for (int i = 0; i < 10000000; i++) {
                 sum = prev + curr;
                 prev = curr;
                 curr = sum;
-                if (i % 1000 == 0) {
-                    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                              << "[Task 1] Loop iteration " << i << ", sum = " << sum << std::endl;
+                if (i % 100000 == 0) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    //std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                              //<< "[Task 1] Loop iteration " << i << ", sum = " << sum << std::endl;
                 }
             }
             
@@ -108,13 +109,14 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
             
             // Simula carico computazionale con loop
             long long prev = 0, curr = 1, sum = 0;
-            for (int i = 0; i < 100000; i++) {
+            for (int i = 0; i < 10000000; i++) {
                 sum = prev + curr;
                 prev = curr;
                 curr = sum;
-                if (i % 1000 == 0) {
-                    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                              << "[Task 2] Loop iteration " << i << ", sum = " << sum << std::endl;
+                if (i % 100000 == 0) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                    //std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                              //<< "[Task 2] Loop iteration " << i << ", sum = " << sum << std::endl;
                 }
             }
             

@@ -9,9 +9,6 @@ schedule:
   # Default values applied to all tasks (optional)
   # Individual tasks can override these
   defaults:
-    priority: 50                    # Default priority (0-100)
-    max_retries: 3                  # Default retry attempts
-    critical: false                 # Default critical flag
     deadline_us: 1000000            # Default deadline (1 second)
     rt_policy: "none"               # RT scheduling: "none", "fifo", "rr", "deadline"
     rt_priority: 50                 # RT priority (1-99, 99 = highest)
@@ -31,10 +28,7 @@ schedule:
       deadline_us: 3000000                  # Task deadline in microseconds
       estimated_duration_us: 500000         # Estimated duration
       
-      # Priority and criticality
-      priority: 90                          # Priority (0-100, higher = more important)
-      critical: true                        # If true, failure aborts entire schedule
-      max_retries: 3                        # Maximum retry attempts on failure
+      # Criticality
       
       # Real-time configuration (optional)
       rt_policy: "fifo"                     # RT policy: "none", "fifo", "rr", "deadline"
@@ -65,10 +59,7 @@ schedule:
       deadline_us: 6000000                  # Deadline (6 seconds)
       estimated_duration_us: 800000         # Estimated duration (800ms)
       
-      # Priority and criticality
-      priority: 80
-      critical: false
-      max_retries: 2
+      # Criticality
       
       # Real-time configuration (optional)
       rt_policy: "rr"                       # RT policy: "none", "fifo", "rr", "deadline"
@@ -102,9 +93,6 @@ schedule:
 # OPTIONAL FIELDS:
 #   - scheduled_time_us: int64    Start time (default: 0 for sequential)
 #   - deadline_us: int64          Task deadline (default: from defaults or 1000000)
-#   - priority: int               Priority 0-100 (default: from defaults or 50)
-#   - max_retries: int            Retry attempts (default: from defaults or 3)
-#   - critical: bool              Critical flag (default: from defaults or false)
 #   - estimated_duration_us: int64 Estimated duration (default: 1000000)
 #   - depends_on: string          Task ID to wait for (sequential only)
 #   - parameters: map             Key-value parameters passed to task
@@ -160,9 +148,6 @@ schedule:
 #   - Values in defaults section apply to all tasks
 #   - Individual task values override defaults
 #   - If neither is specified, built-in defaults are used:
-#       priority: 50
-#       max_retries: 3
-#       critical: false
 #       deadline_us: 1000000
 #       estimated_duration_us: 1000000
 #       rt_policy: "none"

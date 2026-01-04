@@ -9,9 +9,6 @@ schedule:
   
   # Global defaults (optional)
   defaults:
-    priority: 50
-    max_retries: 1
-    critical: true
     deadline_us: 5000000  # 5 seconds
     
   # Task definitions
@@ -23,29 +20,23 @@ schedule:
       mode: timed
       scheduled_time_us: 0
       deadline_us: 3000000
-      priority: 10
-      max_retries: 1
-      critical: true
       estimated_duration_us: 500000
       rt_policy: "fifo"                  # SCHED_FIFO
-      rt_priority: 50                    # Lower RT priority
+      rt_priority: 5                    # Lower RT priority
       cpu_affinity: 1                    # CPU core 0
       parameters:
         input: "11"
       
-    # Task 2: Timed execution at 2 seconds
+    # Task 2: Timed execution with lower priority
     # Input: 5, Output: 5 + 1 = 6
     - id: task_2
       address: "task2:50052"
       mode: timed
-      scheduled_time_us: 0
+      scheduled_time_us: 0          # Start 100ms after task_1
       deadline_us: 3000000
-      priority: 10
-      max_retries: 1
-      critical: true
       estimated_duration_us: 500000
       rt_policy: "fifo"                  # SCHED_FIFO
-      rt_priority: 7                    # Lower RT priority
+      rt_priority: 77                    # Lower RT priority
       cpu_affinity: 1                    # CPU core 0
       parameters:
         input: "9"

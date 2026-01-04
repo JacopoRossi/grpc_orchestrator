@@ -48,9 +48,6 @@
 - `mode` - `sequential` or `timed` (required)
 - `depends_on` - Task dependency (sequential mode)
 - `scheduled_time_us` - Execution time (timed mode)
-- `priority` - Task priority (0-100)
-- `max_retries` - Retry attempts
-- `critical` - Critical flag
 - `deadline_us` - Task deadline
 - `estimated_duration_us` - Estimated duration
 - `parameters` - Key-value parameters

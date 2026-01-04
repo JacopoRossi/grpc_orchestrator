@@ -6,15 +6,11 @@ schedule:
   description: "Tasks execute one after another"
   
   defaults:
-    priority: 50
-    max_retries: 2
     
   tasks:
     - id: data_acquisition
       address: "task1:50051"
       mode: sequential
-      priority: 90
-      critical: true
       estimated_duration_us: 1000000  # 1 second
       parameters:
         source: "sensor_array"
@@ -24,7 +20,6 @@ schedule:
       address: "task2:50051"
       mode: sequential
       depends_on: data_acquisition
-      priority: 80
       estimated_duration_us: 500000
       parameters:
         filter_type: "lowpass"
@@ -34,7 +29,6 @@ schedule:
       address: "task3:50051"
       mode: sequential
       depends_on: preprocessing
-      priority: 70
       estimated_duration_us: 2000000  # 2 seconds
       parameters:
         algorithm: "fft"
@@ -44,7 +38,6 @@ schedule:
       address: "task1:50051"  # Reuse task1 container
       mode: sequential
       depends_on: analysis
-      priority: 60
       estimated_duration_us: 300000
       parameters:
         database: "timeseries_db"

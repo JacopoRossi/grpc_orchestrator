@@ -9,9 +9,6 @@ schedule:
   
   # Global defaults (optional)
   defaults:
-    priority: 50
-    max_retries: 1
-    critical: true
     deadline_us: 5000000  # 5 seconds
     
   # Task definitions
@@ -23,9 +20,6 @@ schedule:
       mode: sequential
       scheduled_time_us: 0
       deadline_us: 3000000
-      priority: 10
-      max_retries: 1
-      critical: true
       estimated_duration_us: 500000
       rt_policy: "fifo"                  # SCHED_FIFO
       rt_priority: 30                    # Lower RT priority
@@ -40,9 +34,6 @@ schedule:
       mode: timed
       scheduled_time_us: 2000000
       deadline_us: 3000000
-      priority: 10
-      max_retries: 1
-      critical: true
       estimated_duration_us: 500000
       rt_policy: "fifo"                  # SCHED_FIFO
       rt_priority: 30                    # Lower RT priority
@@ -57,13 +48,10 @@ schedule:
       mode: sequential
       scheduled_time_us: 0
       deadline_us: 3000000
-      priority: 10
-      max_retries: 1
-      critical: true
       estimated_duration_us: 500000
       rt_policy: "fifo"                  # SCHED_FIFO
       rt_priority: 30                    # Lower RT priority
       cpu_affinity: 2                    # CPU core 0
-      depends_on: task_2
+      depends_on: task_1
       parameters:
         input2: "22"

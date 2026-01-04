@@ -26,9 +26,6 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
             }
             
             // Parse defaults
-            int default_priority = 50;
-            int default_max_retries = 3;
-            bool default_critical = false;
             int64_t default_deadline_us = 1000000;
             std::string default_rt_policy = "none";
             int default_rt_priority = 50;
@@ -36,9 +33,6 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
             
             if (sched["defaults"]) {
                 YAML::Node defaults = sched["defaults"];
-                if (defaults["priority"]) default_priority = defaults["priority"].as<int>();
-                if (defaults["max_retries"]) default_max_retries = defaults["max_retries"].as<int>();
-                if (defaults["critical"]) default_critical = defaults["critical"].as<bool>();
                 if (defaults["deadline_us"]) default_deadline_us = defaults["deadline_us"].as<int64_t>();
                 if (defaults["rt_policy"]) default_rt_policy = defaults["rt_policy"].as<std::string>();
                 if (defaults["rt_priority"]) default_rt_priority = defaults["rt_priority"].as<int>();
@@ -81,9 +75,6 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
                     }
                     
                     // Optional fields with defaults
-                    task.priority = task_node["priority"] ? task_node["priority"].as<int>() : default_priority;
-                    task.max_retries = task_node["max_retries"] ? task_node["max_retries"].as<int>() : default_max_retries;
-                    task.critical = task_node["critical"] ? task_node["critical"].as<bool>() : default_critical;
                     task.deadline_us = task_node["deadline_us"] ? task_node["deadline_us"].as<int64_t>() : default_deadline_us;
                     task.estimated_duration_us = task_node["estimated_duration_us"] ? task_node["estimated_duration_us"].as<int64_t>() : 1000000;
                     
@@ -156,13 +147,10 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     task1.task_address = use_docker_hostnames ? "task1:50051" : "localhost:50051";
     task1.scheduled_time_us = 0;        // Start immediately
     task1.deadline_us = 3000000;        // 2 seconds
-    task1.priority = 10;
     task1.parameters["mode"] = "fast";
     task1.parameters["iterations"] = "100";
     task1.parameters["task_id"] = "task_1";
     task1.estimated_duration_us = 500000;  // 500ms
-    task1.max_retries = 3;
-    task1.critical = true;
     task1.execution_mode = TASK_MODE_SEQUENTIAL;  // Sequential
     task1.wait_for_task_id = "";        // No dependency
     task1.rt_policy = "none";
@@ -175,13 +163,10 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     task2.task_address = use_docker_hostnames ? "task2:50052" : "localhost:50052";
     task2.scheduled_time_us = 8000000;  // 2 seconds from start
     task2.deadline_us = 1000000;        // 3 seconds
-    task2.priority = 10;
     task2.parameters["mode"] = "normal";
     task2.parameters["data_size"] = "1024";
     task2.parameters["task_id"] = "task_2";
     task2.estimated_duration_us = 800000;  // 800ms
-    task2.max_retries = 2;
-    task2.critical = false;
     task2.execution_mode = TASK_MODE_TIMED;  // Timed execution
     task2.wait_for_task_id = "";        // No dependency
     task2.rt_policy = "none";
@@ -194,13 +179,10 @@ TaskSchedule ScheduleParser::create_test_schedule() {
     task3.task_address = use_docker_hostnames ? "task3:50053" : "localhost:50053";
     task3.scheduled_time_us = 0;        // Time doesn't matter in sequential mode
     task3.deadline_us = 5000000;        // 5 seconds
-    task3.priority = 8;
     task3.parameters["mode"] = "slow";
     task3.parameters["quality"] = "high";
     task3.parameters["task_id"] = "task_3";
     task3.estimated_duration_us = 1500000;  // 1.5 seconds
-    task3.max_retries = 1;
-    task3.critical = true;
     task3.execution_mode = TASK_MODE_SEQUENTIAL;  // Sequential
     task3.wait_for_task_id = "task_1";  // Wait for task_1 to complete
     task3.rt_policy = "none";

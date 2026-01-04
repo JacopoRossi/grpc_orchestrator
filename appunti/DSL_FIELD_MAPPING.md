@@ -13,9 +13,6 @@ This document shows the **exact mapping** between C++ `ScheduledTask` fields and
 | `execution_mode` | `mode` | enum | ✅ Yes | - | `"sequential"` or `"timed"` |
 | `scheduled_time_us` | `scheduled_time_us` | int64 | ⚠️ Conditional | 0 | Required for `timed` mode |
 | `deadline_us` | `deadline_us` | int64 | ❌ No | 1000000 | From defaults or built-in |
-| `priority` | `priority` | int | ❌ No | 50 | From defaults or built-in |
-| `max_retries` | `max_retries` | int | ❌ No | 3 | From defaults or built-in |
-| `critical` | `critical` | bool | ❌ No | false | From defaults or built-in |
 | `estimated_duration_us` | `estimated_duration_us` | int64 | ❌ No | 1000000 | Built-in default |
 | `wait_for_task_id` | `depends_on` | string | ❌ No | "" | Only for `sequential` mode |
 | `parameters` | `parameters` | map | ❌ No | {} | Key-value pairs |
@@ -32,9 +29,6 @@ task1.task_address = "task1:50051";
 task1.execution_mode = TASK_MODE_SEQUENTIAL;
 task1.scheduled_time_us = 0;
 task1.deadline_us = 1000000;        // default
-task1.priority = 50;                // default
-task1.max_retries = 3;              // default
-task1.critical = false;             // default
 task1.estimated_duration_us = 1000000; // default
 task1.wait_for_task_id = "";
 task1.parameters["task_id"] = "task_1"; // auto-added
@@ -65,7 +59,6 @@ task1.parameters["mode"] = "fast";
 task1.parameters["iterations"] = "100";
 task1.parameters["task_id"] = "task_1";
 task1.estimated_duration_us = 500000;
-task1.max_retries = 3;
 task1.critical = true;
 task1.execution_mode = TASK_MODE_SEQUENTIAL;
 task1.wait_for_task_id = "";
@@ -79,7 +72,6 @@ task1.wait_for_task_id = "";
   scheduled_time_us: 0
   deadline_us: 3000000
   priority: 10
-  max_retries: 3
   critical: true
   estimated_duration_us: 500000
   # depends_on: ""  # Empty or omitted
@@ -105,7 +97,6 @@ task2.parameters["mode"] = "normal";
 task2.parameters["data_size"] = "1024";
 task2.parameters["task_id"] = "task_2";
 task2.estimated_duration_us = 800000;
-task2.max_retries = 2;
 task2.critical = false;
 task2.execution_mode = TASK_MODE_TIMED;
 task2.wait_for_task_id = "";  // Ignored for timed
@@ -119,7 +110,6 @@ task2.wait_for_task_id = "";  // Ignored for timed
   scheduled_time_us: 8000000
   deadline_us: 1000000
   priority: 10
-  max_retries: 2
   critical: false
   estimated_duration_us: 800000
   parameters:
@@ -143,7 +133,6 @@ task3.parameters["mode"] = "slow";
 task3.parameters["quality"] = "high";
 task3.parameters["task_id"] = "task_3";
 task3.estimated_duration_us = 500000;
-task3.max_retries = 3;
 task3.critical = true;
 task3.execution_mode = TASK_MODE_SEQUENTIAL;
 task3.wait_for_task_id = "task_1";  // Wait for task_1
@@ -158,7 +147,6 @@ task3.wait_for_task_id = "task_1";  // Wait for task_1
   scheduled_time_us: 0
   deadline_us: 3000000
   priority: 10
-  max_retries: 3
   critical: true
   estimated_duration_us: 500000
   parameters:
@@ -222,17 +210,11 @@ task.parameters["task_id"] = "task_3";  // Auto-added by parser
 **YAML:**
 ```yaml
 defaults:
-  priority: 50
-  max_retries: 3
-  critical: false
   deadline_us: 1000000
 ```
 
 **C++ (applied if field not specified):**
 ```cpp
-int default_priority = 50;
-int default_max_retries = 3;
-bool default_critical = false;
 int64_t default_deadline_us = 1000000;
 
 // Applied like this:
@@ -255,7 +237,6 @@ task1.parameters["mode"] = "fast";
 task1.parameters["iterations"] = "100";
 task1.parameters["task_id"] = "task_1";
 task1.estimated_duration_us = 500000;
-task1.max_retries = 3;
 task1.critical = true;
 task1.execution_mode = TASK_MODE_SEQUENTIAL;
 task1.wait_for_task_id = "";
@@ -273,7 +254,6 @@ schedule:
       scheduled_time_us: 0
       deadline_us: 3000000
       priority: 10
-      max_retries: 3
       critical: true
       estimated_duration_us: 500000
       parameters:

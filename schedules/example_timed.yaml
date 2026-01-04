@@ -6,9 +6,6 @@ schedule:
   description: "Concurrent sensor monitoring with timed execution"
   
   defaults:
-    priority: 50
-    max_retries: 3
-    critical: false
     
   tasks:
     # Immediate initialization
@@ -16,8 +13,6 @@ schedule:
       address: "task1:50051"
       mode: timed
       scheduled_time_us: 0  # Start immediately
-      priority: 95
-      critical: true
       estimated_duration_us: 200000  # 200ms
       parameters:
         action: "initialize"
@@ -28,7 +23,6 @@ schedule:
       address: "task2:50052"
       mode: timed
       scheduled_time_us: 1000000  # 1 second
-      priority: 80
       estimated_duration_us: 100000  # 100ms
       parameters:
         sensor_type: "temperature"
@@ -40,7 +34,6 @@ schedule:
       address: "task3:50053"
       mode: timed
       scheduled_time_us: 2000000  # 2 seconds
-      priority: 80
       estimated_duration_us: 100000  # 100ms
       parameters:
         sensor_type: "pressure"
@@ -52,7 +45,6 @@ schedule:
       address: "task1:50051"
       mode: timed
       scheduled_time_us: 3000000  # 3 seconds
-      priority: 70
       estimated_duration_us: 300000  # 300ms
       parameters:
         window_size: "1000"
@@ -64,7 +56,6 @@ schedule:
       address: "task2:50052"
       mode: timed
       scheduled_time_us: 5000000  # 5 seconds
-      priority: 60
       estimated_duration_us: 500000  # 500ms
       parameters:
         format: "pdf"

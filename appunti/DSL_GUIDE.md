@@ -14,9 +14,6 @@ schedule:
   description: "Schedule description"
   
   defaults:
-    priority: 50
-    max_retries: 3
-    critical: false
     deadline_us: 1000000
     
   tasks:
@@ -41,9 +38,6 @@ Default values applied to all tasks (can be overridden per task):
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `priority` | int | 50 | Task priority (0-100, higher = more important) |
-| `max_retries` | int | 3 | Maximum retry attempts on failure |
-| `critical` | bool | false | Whether task failure aborts the schedule |
 | `deadline_us` | int64 | 1000000 | Task deadline in microseconds |
 
 ### Task Configuration
@@ -68,9 +62,6 @@ Default values applied to all tasks (can be overridden per task):
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `priority` | int | Task priority (overrides default) |
-| `max_retries` | int | Max retries (overrides default) |
-| `critical` | bool | Critical flag (overrides default) |
 | `deadline_us` | int64 | Deadline (overrides default) |
 | `estimated_duration_us` | int64 | Estimated task duration in microseconds |
 | `parameters` | map | Key-value parameters passed to task |
@@ -154,15 +145,11 @@ schedule:
   description: "Sequential data processing"
   
   defaults:
-    priority: 50
-    max_retries: 2
     
   tasks:
     - id: acquire_data
       address: "task1:50051"
       mode: sequential
-      priority: 90
-      critical: true
       estimated_duration_us: 1000000
       parameters:
         source: "sensor_array"
@@ -172,7 +159,6 @@ schedule:
       address: "task2:50051"
       mode: sequential
       depends_on: acquire_data
-      priority: 80
       estimated_duration_us: 500000
       parameters:
         algorithm: "fft"
@@ -181,7 +167,6 @@ schedule:
       address: "task3:50051"
       mode: sequential
       depends_on: process_data
-      priority: 70
       estimated_duration_us: 300000
       parameters:
         database: "timeseries_db"
@@ -199,7 +184,6 @@ schedule:
       address: "task1:50051"
       mode: timed
       scheduled_time_us: 0
-      priority: 80
       parameters:
         sensor_type: "temperature"
       
@@ -207,7 +191,6 @@ schedule:
       address: "task2:50051"
       mode: timed
       scheduled_time_us: 500000  # 500ms offset
-      priority: 80
       parameters:
         sensor_type: "pressure"
       
@@ -215,7 +198,6 @@ schedule:
       address: "task3:50051"
       mode: timed
       scheduled_time_us: 1000000  # After 1 second
-      priority: 70
       parameters:
         window_size: 1000
 ```
@@ -232,8 +214,6 @@ schedule:
     - id: init_system
       address: "task1:50051"
       mode: sequential
-      priority: 95
-      critical: true
       parameters:
         action: "initialize"
     
@@ -242,7 +222,6 @@ schedule:
       address: "task2:50051"
       mode: timed
       scheduled_time_us: 0
-      priority: 60
       parameters:
         interval_ms: 100
     
@@ -251,7 +230,6 @@ schedule:
       address: "task3:50051"
       mode: sequential
       depends_on: init_system
-      priority: 85
       parameters:
         workload: "heavy"
     
@@ -260,7 +238,6 @@ schedule:
       address: "task1:50051"
       mode: timed
       scheduled_time_us: 5000000
-      priority: 70
       parameters:
         format: "json"
 ```
@@ -326,15 +303,13 @@ Provided examples:
   deadline_us: 6000000  # 6 seconds (20% margin)
 ```
 
-### 3. Use Priorities Wisely
+### 3. Set Realistic Timeouts
 ```yaml
-- id: critical_safety_check
-  priority: 95
-  critical: true
+- id: safety_check
+  deadline_us: 1000000  # 1 second
 
 - id: optional_logging
-  priority: 30
-  critical: false
+  deadline_us: 5000000  # 5 seconds
 ```
 
 ### 4. Group Related Parameters
