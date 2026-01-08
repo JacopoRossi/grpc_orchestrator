@@ -23,7 +23,7 @@ struct TaskExecution {
     TaskState state;
     TaskResult result;
     std::string error_message;
-    std::map<std::string, std::string> output_data;
+    std::string output_data_json;
 };
 
 // Orchestrator service implementation (receives task end notifications)
@@ -108,7 +108,7 @@ private:
     std::unordered_map<std::string, TaskExecution> active_tasks_;
     std::vector<TaskExecution> completed_tasks_;
     std::unordered_map<std::string, bool> task_completed_;  // Track completed tasks for dependencies
-    std::unordered_map<std::string, std::map<std::string, std::string>> task_outputs_;  // Store task outputs
+    std::unordered_map<std::string, std::string> task_outputs_;  // Store task outputs as JSON
     
     // Synchronization
     std::condition_variable completion_cv_;

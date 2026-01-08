@@ -4,6 +4,9 @@
 #include <chrono>
 #include <algorithm>
 #include <pthread.h>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 namespace orchestrator {
 
@@ -184,17 +187,13 @@ void Orchestrator::on_task_end(const TaskEndNotification& notification) {
     exec.error_message = notification.error_message();
     
     // Store output data
-    for (const auto& output : notification.output_data()) {
-        exec.output_data[output.first] = output.second;
-    }
-    task_outputs_[notification.task_id()] = exec.output_data;
+    exec.output_data_json = notification.output_data_json();
+    task_outputs_[notification.task_id()] = exec.output_data_json;
     
     // Log output data if present
-    if (!exec.output_data.empty()) {
-        std::cout << "[Orchestrator] Task " << notification.task_id() << " output:" << std::endl;
-        for (const auto& output : exec.output_data) {
-            std::cout << "  " << output.first << " = " << output.second << std::endl;
-        }
+    if (!exec.output_data_json.empty() && exec.output_data_json != "{}") {
+        std::cout << "[Orchestrator] Task " << notification.task_id() << " output: " 
+                  << exec.output_data_json << std::endl;
     }
     
     // Log already printed in NotifyTaskEnd
@@ -374,24 +373,33 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
     request.set_rt_priority(task.rt_priority);
     request.set_cpu_affinity(task.cpu_affinity);
     
-    // Copy task parameters
-    for (const auto& param : task.parameters) {
-        (*request.mutable_parameters())[param.first] = param.second;
-    }
+    // Set task parameters JSON
+    std::string params_json = task.parameters_json;
     
     // Add output from dependent task if available
     if (!task.wait_for_task_id.empty()) {
         std::lock_guard<std::mutex> lock(mutex_);
         auto output_it = task_outputs_.find(task.wait_for_task_id);
-        if (output_it != task_outputs_.end()) {
+        if (output_it != task_outputs_.end() && !output_it->second.empty()) {
             std::cout << "[Orchestrator] Passing output from " << task.wait_for_task_id 
                       << " to " << task.task_id << std::endl;
-            for (const auto& output : output_it->second) {
-                // Add output with a prefix to distinguish from regular parameters
-                (*request.mutable_parameters())["dep_" + output.first] = output.second;
+            
+            try {
+                // Parse both JSONs
+                json params = params_json.empty() ? json::object() : json::parse(params_json);
+                json dep_output = json::parse(output_it->second);
+                
+                // Merge dependency output into parameters under "dep_output" key
+                params["dep_output"] = dep_output;
+                
+                params_json = params.dump();
+            } catch (const json::exception& e) {
+                std::cerr << "[Orchestrator] JSON merge error: " << e.what() << std::endl;
             }
         }
     }
+    
+    request.set_parameters_json(params_json);
     
     StartTaskResponse response;
     grpc::ClientContext context;
@@ -440,8 +448,9 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
 }
 
 int64_t Orchestrator::get_current_time_us() const {
+    // Use system_clock for global synchronization across containers
     return std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+        std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 } // namespace orchestrator

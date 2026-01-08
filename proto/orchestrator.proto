@@ -56,7 +56,7 @@ message StartTaskRequest {
   string task_id = 1;                    // Unique task identifier
   int64 scheduled_time_us = 2;           // Scheduled execution time (microseconds)
   int64 deadline_us = 3;                 // Task deadline (microseconds)
-  map<string, string> parameters = 4;    // Task-specific parameters
+  string parameters_json = 4;            // Task-specific parameters as JSON string
   string rt_policy = 6;                  // Real-time policy: "none", "fifo", "rr", "deadline"
   int32 rt_priority = 7;                 // Real-time priority (1-99, 99 = highest)
   int32 cpu_affinity = 8;                // CPU core affinity (-1 = no affinity)
@@ -103,8 +103,8 @@ message TaskEndNotification {
   int64 end_time_us = 4;
   int64 execution_duration_us = 5;
   string error_message = 6;              // Empty if success
-  map<string, string> metrics = 7;       // Additional metrics
-  map<string, string> output_data = 8;   // Output data to be passed to dependent tasks
+  string metrics_json = 7;               // Additional metrics as JSON string
+  string output_data_json = 8;           // Output data to be passed to dependent tasks as JSON string
 }
 
 message TaskEndResponse {

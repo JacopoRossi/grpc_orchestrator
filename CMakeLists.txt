@@ -10,6 +10,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Threads REQUIRED)
 find_package(Protobuf REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 # Set output directories
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -85,6 +86,7 @@ target_link_libraries(orchestrator_lib
         protobuf::libprotobuf
         Threads::Threads
         yaml-cpp
+        nlohmann_json::nlohmann_json
 )
 
 target_include_directories(orchestrator_lib

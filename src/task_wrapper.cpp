@@ -3,6 +3,9 @@
 #include <iomanip>
 #include <chrono>
 #include <pthread.h>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 namespace orchestrator {
 
@@ -208,24 +211,26 @@ void TaskWrapper::task_execution_thread(StartTaskRequest request) {
     state_ = TASK_STATE_STARTING;
     start_time_us_ = get_current_time_us();
     
-    // Convert parameters to map
-    std::map<std::string, std::string> params;
-    for (const auto& param : request.parameters()) {
-        params[param.first] = param.second;
+    // Get parameters JSON and add task_id
+    std::string params_json = request.parameters_json();
+    try {
+        json params = params_json.empty() ? json::object() : json::parse(params_json);
+        params["task_id"] = task_id_;
+        params_json = params.dump();
+    } catch (const json::exception& e) {
+        std::cerr << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
+                  << "[Task " << task_id_ << "] JSON parse error: " << e.what() << std::endl;
     }
-    
-    // Add task_id to parameters so the callback can identify which task it is
-    params["task_id"] = task_id_;
     
     state_ = TASK_STATE_RUNNING;
     
     // Execute the actual task
     TaskResult result = TASK_RESULT_UNKNOWN;
     std::string error_message;
-    std::map<std::string, std::string> output_data;
+    std::string output_data_json = "{}";
     
     try {
-        result = execution_callback_(params, output_data);
+        result = execution_callback_(params_json, output_data_json);
         
         if (result == TASK_RESULT_UNKNOWN) {
             result = TASK_RESULT_SUCCESS;
@@ -259,14 +264,14 @@ void TaskWrapper::task_execution_thread(StartTaskRequest request) {
     state_ = TASK_STATE_COMPLETED;
     
     // Notify orchestrator
-    notify_orchestrator_end(result, error_message, output_data);
+    notify_orchestrator_end(result, error_message, output_data_json);
     
     // Return to idle state
     state_ = TASK_STATE_IDLE;
 }
 
 void TaskWrapper::notify_orchestrator_end(TaskResult result, const std::string& error_msg, 
-                                          const std::map<std::string, std::string>& output_data) {
+                                          const std::string& output_data_json) {
     std::cout << "[" << std::setw(13) << get_relative_time_ms() << " ms] "
               << "[Task " << task_id_ << "] Notifying orchestrator of task end" 
               << std::endl;
@@ -278,11 +283,7 @@ void TaskWrapper::notify_orchestrator_end(TaskResult result, const std::string& 
     notification.set_end_time_us(end_time_us_);
     notification.set_execution_duration_us(end_time_us_ - start_time_us_);
     notification.set_error_message(error_msg);
-    
-    // Add output data
-    for (const auto& output : output_data) {
-        (*notification.mutable_output_data())[output.first] = output.second;
-    }
+    notification.set_output_data_json(output_data_json);
     
     TaskEndResponse response;
     grpc::ClientContext context;
@@ -317,8 +318,9 @@ int64_t TaskWrapper::get_elapsed_time_us() const {
 }
 
 int64_t TaskWrapper::get_current_time_us() const {
+    // Use system_clock for global synchronization across containers
     return std::chrono::duration_cast<std::chrono::microseconds>(
-        std::chrono::steady_clock::now().time_since_epoch()).count();
+        std::chrono::system_clock::now().time_since_epoch()).count();
 }
 
 int64_t TaskWrapper::get_relative_time_ms() const {

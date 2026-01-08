@@ -6,6 +6,9 @@
 #include <chrono>
 #include <signal.h>
 #include <cstring>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 using namespace orchestrator;
 
@@ -28,24 +31,25 @@ void signal_handler(int signal) {
 }
 
 // Example task execution function
-TaskResult example_task_function(const std::map<std::string, std::string>& params, 
-                                  std::map<std::string, std::string>& output) {
+TaskResult example_task_function(const std::string& params_json, std::string& output_json) {
     std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-              << "[Task Function] Starting execution with parameters:" << std::endl;
+              << "[Task Function] Starting execution with parameters: " << params_json << std::endl;
     
-    for (const auto& param : params) {
-        std::cout << "  " << param.first << " = " << param.second << std::endl;
+    // Parse input JSON
+    json params;
+    try {
+        params = json::parse(params_json);
+    } catch (const json::exception& e) {
+        std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                  << "[Task Function] JSON parse error: " << e.what() << std::endl;
+        return TASK_RESULT_FAILURE;
     }
     
     // Get task_id to determine which logic to execute
-    std::string task_id;
-    auto task_id_it = params.find("task_id");
-    if (task_id_it != params.end()) {
-        task_id = task_id_it->second;
-    }
+    std::string task_id = params.value("task_id", "");
     
-    // Clear previous output
-    output.clear();
+    // Initialize output JSON
+    json output = json::object();
     
     // Execute task-specific logic
     std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
@@ -53,15 +57,14 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
     
     if (task_id == "task_1") {
         // Task 1: input = number, output = number * 5
-        auto input_it = params.find("input");
-        if (input_it == params.end()) {
+        if (!params.contains("input")) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 1] ERROR: Missing 'input' parameter" << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
         try {
-            int input_value = std::stoi(input_it->second);
+            int input_value = params["input"].is_string() ? std::stoi(params["input"].get<std::string>()) : params["input"].get<int>();
             
             
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
@@ -84,7 +87,7 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 1] Output: " << input_value << " * 5 = " << output_value << std::endl;
             
-            output["result"] = std::to_string(output_value);
+            output["result"] = output_value;
             
         } catch (const std::exception& e) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
@@ -94,15 +97,14 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
         
     } else if (task_id == "task_2") {
         // Task 2: input = number, output = number + 1
-        auto input_it = params.find("input");
-        if (input_it == params.end()) {
+        if (!params.contains("input")) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 2] ERROR: Missing 'input' parameter" << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
         try {
-            int input_value = std::stoi(input_it->second);   
+            int input_value = params["input"].is_string() ? std::stoi(params["input"].get<std::string>()) : params["input"].get<int>();   
 
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 2] Input: " << input_value << std::endl;
@@ -126,7 +128,7 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 2] Output: " << input_value << " + 1 = " << output_value << std::endl;
             
-            output["result"] = std::to_string(output_value);
+            output["result"] = output_value;
             
         } catch (const std::exception& e) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
@@ -135,24 +137,25 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
         }
         
     } else if (task_id == "task_3") {
-        // Task 3: input1 = output from task_2 (dep_result), input2 = another number, output = input1 * input2
-        auto input1_it = params.find("dep_result");  // Output from dependent task
-        auto input2_it = params.find("input2");
-        
-        if (input1_it == params.end() || input2_it == params.end()) {
+        // Task 3: input1 = output from task_2 (dep_output.result), input2 = another number, output = input1 * input2
+        if (!params.contains("dep_output") || !params.contains("input2")) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 3] ERROR: Missing 'dep_result' or 'input2' parameter" << std::endl;
+                      << "[Task 3] ERROR: Missing 'dep_output' or 'input2' parameter" << std::endl;
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 3] Available parameters:" << std::endl;
-            for (const auto& param : params) {
-                std::cerr << "  " << param.first << " = " << param.second << std::endl;
-            }
+                      << "[Task 3] Available parameters: " << params.dump() << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
         try {
-            int input1_value = std::stoi(input1_it->second);
-            int input2_value = std::stoi(input2_it->second);
+            json dep_output = params["dep_output"];
+            if (!dep_output.contains("result")) {
+                std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                          << "[Task 3] ERROR: Missing 'result' in dep_output" << std::endl;
+                return TASK_RESULT_FAILURE;
+            }
+            
+            int input1_value = dep_output["result"].is_string() ? std::stoi(dep_output["result"].get<std::string>()) : dep_output["result"].get<int>();
+            int input2_value = params["input2"].is_string() ? std::stoi(params["input2"].get<std::string>()) : params["input2"].get<int>();
             
             // Sleep di 5 secondi
             
@@ -168,7 +171,7 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
                       << "[Task 3] Output: " << input1_value << " * " << input2_value << " = " << output_value << std::endl;
             
-            output["result"] = std::to_string(output_value);
+            output["result"] = output_value;
             
         } catch (const std::exception& e) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
@@ -186,6 +189,9 @@ TaskResult example_task_function(const std::map<std::string, std::string>& param
     
     std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
               << "[Task Function] Task completed successfully" << std::endl;
+    
+    // Convert output to JSON string
+    output_json = output.dump();
     
     return TASK_RESULT_SUCCESS;
 }

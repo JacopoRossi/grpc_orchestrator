@@ -20,7 +20,7 @@ struct ScheduledTask {
     std::string task_address;          // gRPC address (e.g., "localhost:50051")
     int64_t scheduled_time_us;         // Scheduled start time in microseconds
     int64_t deadline_us;               // Task deadline in microseconds
-    std::map<std::string, std::string> parameters;  // Task parameters
+    std::string parameters_json;       // Task parameters as JSON string
     TaskExecutionMode execution_mode;  // Sequential or timed execution
     std::string wait_for_task_id;      // Task ID to wait for (if sequential)
     

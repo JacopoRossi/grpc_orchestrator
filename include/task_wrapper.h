@@ -12,8 +12,9 @@
 namespace orchestrator {
 
 // Task execution callback type - returns result and output data
-using TaskExecutionCallback = std::function<TaskResult(const std::map<std::string, std::string>&, 
-                                                        std::map<std::string, std::string>&)>;
+// Input: JSON string with parameters
+// Output: JSON string with output data (passed by reference)
+using TaskExecutionCallback = std::function<TaskResult(const std::string&, std::string&)>;
 
 // Task service implementation (receives start/stop commands)
 class TaskServiceImpl final : public TaskService::Service {
@@ -81,7 +82,7 @@ private:
     
     // Send task end notification to orchestrator
     void notify_orchestrator_end(TaskResult result, const std::string& error_msg = "", 
-                                  const std::map<std::string, std::string>& output_data = {});
+                                  const std::string& output_data_json = "{}");
     
     // Get current time in microseconds
     int64_t get_current_time_us() const;
