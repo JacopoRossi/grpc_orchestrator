@@ -9,6 +9,50 @@ using json = nlohmann::json;
 
 namespace orchestrator {
 
+// Helper function to convert YAML node to JSON value while preserving types
+static json yaml_to_json(const YAML::Node& node) {
+    switch (node.Type()) {
+        case YAML::NodeType::Null:
+            return nullptr;
+        case YAML::NodeType::Scalar: {
+            // Try to determine the type
+            try {
+                // Try int first
+                return node.as<int>();
+            } catch (...) {
+                try {
+                    // Try double
+                    return node.as<double>();
+                } catch (...) {
+                    try {
+                        // Try bool
+                        return node.as<bool>();
+                    } catch (...) {
+                        // Default to string
+                        return node.as<std::string>();
+                    }
+                }
+            }
+        }
+        case YAML::NodeType::Sequence: {
+            json arr = json::array();
+            for (const auto& item : node) {
+                arr.push_back(yaml_to_json(item));
+            }
+            return arr;
+        }
+        case YAML::NodeType::Map: {
+            json obj = json::object();
+            for (const auto& pair : node) {
+                obj[pair.first.as<std::string>()] = yaml_to_json(pair.second);
+            }
+            return obj;
+        }
+        default:
+            return node.as<std::string>();
+    }
+}
+
 TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
     std::cout << "[ScheduleParser] Parsing YAML file: " << yaml_path << std::endl;
     
@@ -91,7 +135,7 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
                     if (task_node["parameters"]) {
                         YAML::Node params = task_node["parameters"];
                         for (YAML::const_iterator it = params.begin(); it != params.end(); ++it) {
-                            params_obj[it->first.as<std::string>()] = it->second.as<std::string>();
+                            params_obj[it->first.as<std::string>()] = yaml_to_json(it->second);
                         }
                     }
                     

@@ -58,7 +58,7 @@ services:
     ports:
       - "50051:50051"
     command: >
-      ./task_main
+      ./task1_data_analyzer
       --name task_1
       --address 0.0.0.0:50051
       --orchestrator orchestrator:50050
@@ -81,7 +81,7 @@ services:
     security_opt:
       - seccomp:unconfined
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "task_main"]
+      test: ["CMD", "pgrep", "-f", "task1_data_analyzer"]
       interval: 5s
       timeout: 3s
       retries: 3
@@ -98,7 +98,7 @@ services:
     ports:
       - "50052:50052"
     command: >
-      ./task_main
+      ./task2_image_processor
       --name task_2
       --address 0.0.0.0:50052
       --orchestrator orchestrator:50050
@@ -121,7 +121,7 @@ services:
     security_opt:
       - seccomp:unconfined
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "task_main"]
+      test: ["CMD", "pgrep", "-f", "task2_image_processor"]
       interval: 5s
       timeout: 3s
       retries: 3
@@ -138,7 +138,7 @@ services:
     ports:
       - "50053:50053"
     command: >
-      ./task_main
+      ./task3_report_generator
       --name task_3
       --address 0.0.0.0:50053
       --orchestrator orchestrator:50050
@@ -161,7 +161,7 @@ services:
     security_opt:
       - seccomp:unconfined
     healthcheck:
-      test: ["CMD", "pgrep", "-f", "task_main"]
+      test: ["CMD", "pgrep", "-f", "task3_report_generator"]
       interval: 5s
       timeout: 3s
       retries: 3

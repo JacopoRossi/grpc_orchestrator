@@ -110,7 +110,37 @@ target_link_libraries(orchestrator_main
         orchestrator_lib
 )
 
-# Task executable
+# Task 1: Data Analyzer
+add_executable(task1_data_analyzer
+    examples/task1_data_analyzer.cpp
+)
+
+target_link_libraries(task1_data_analyzer
+    PRIVATE
+        orchestrator_lib
+)
+
+# Task 2: Image Processor
+add_executable(task2_image_processor
+    examples/task2_image_processor.cpp
+)
+
+target_link_libraries(task2_image_processor
+    PRIVATE
+        orchestrator_lib
+)
+
+# Task 3: Report Generator
+add_executable(task3_report_generator
+    examples/task3_report_generator.cpp
+)
+
+target_link_libraries(task3_report_generator
+    PRIVATE
+        orchestrator_lib
+)
+
+# Legacy task executable (for backward compatibility)
 add_executable(task_main
     examples/task_main.cpp
 )
@@ -124,7 +154,9 @@ target_link_libraries(task_main
 # Installation
 # ============================================================================
 
-install(TARGETS orchestrator_lib orchestrator_main task_main
+install(TARGETS orchestrator_lib orchestrator_main 
+                task1_data_analyzer task2_image_processor task3_report_generator
+                task_main
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib

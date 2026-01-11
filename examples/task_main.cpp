@@ -56,126 +56,337 @@ TaskResult example_task_function(const std::string& params_json, std::string& ou
               << "\n========================================" << std::endl;
     
     if (task_id == "task_1") {
-        // Task 1: input = number, output = number * 5
-        if (!params.contains("input")) {
+        // ============================================================
+        // TASK 1: DATA ANALYZER
+        // Analizza un array di dati numerici e calcola statistiche
+        // Input: array di numeri, numero di campioni
+        // Output: media, min, max, deviazione standard
+        // ============================================================
+        
+        if (!params.contains("data_size")) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 1] ERROR: Missing 'input' parameter" << std::endl;
+                      << "[Task 1 - Data Analyzer] ERROR: Missing 'data_size' parameter" << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
         try {
-            int input_value = params["input"].is_string() ? std::stoi(params["input"].get<std::string>()) : params["input"].get<int>();
-            
+            int data_size = params["data_size"].is_string() ? 
+                std::stoi(params["data_size"].get<std::string>()) : 
+                params["data_size"].get<int>();
             
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 1] Input: " << input_value << std::endl;
+                      << "[Task 1 - Data Analyzer] Starting analysis of " << data_size << " data points" << std::endl;
             
-            // Simula carico computazionale con loop
-            long long prev = 0, curr = 1, sum = 0;
-            for (int i = 0; i < 10000000; i++) {
-                sum = prev + curr;
-                prev = curr;
-                curr = sum;
-                if (i % 100000 == 0) {
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
-                    //std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                              //<< "[Task 1] Loop iteration " << i << ", sum = " << sum << std::endl;
+            // Genera dati simulati (in un caso reale sarebbero letti da file/database)
+            std::vector<double> data(data_size);
+            for (int i = 0; i < data_size; i++) {
+                data[i] = 100.0 + (i % 50) * 2.5 + (i % 7) * 0.3;
+            }
+            
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 1 - Data Analyzer] Data generated, computing statistics..." << std::endl;
+            
+            // Calcola statistiche con carico computazionale realistico
+            double sum = 0.0, min_val = data[0], max_val = data[0];
+            
+            // Prima passata: somma, min, max
+            for (int i = 0; i < data_size; i++) {
+                sum += data[i];
+                if (data[i] < min_val) min_val = data[i];
+                if (data[i] > max_val) max_val = data[i];
+                
+                // Simula elaborazione pesante ogni 100k elementi
+                if (i > 0 && i % 100000 == 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                              << "[Task 1 - Data Analyzer] Processed " << i << "/" << data_size << " elements" << std::endl;
                 }
             }
             
-            int output_value = input_value * 5;
-            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 1] Output: " << input_value << " * 5 = " << output_value << std::endl;
+            double mean = sum / data_size;
             
-            output["result"] = output_value;
+            // Seconda passata: deviazione standard
+            double variance_sum = 0.0;
+            for (int i = 0; i < data_size; i++) {
+                double diff = data[i] - mean;
+                variance_sum += diff * diff;
+                
+                if (i > 0 && i % 100000 == 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                }
+            }
+            
+            double std_dev = std::sqrt(variance_sum / data_size);
+            
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 1 - Data Analyzer] Analysis complete!" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 1 - Data Analyzer] Results:" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Mean: " << mean << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Min: " << min_val << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Max: " << max_val << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Std Dev: " << std_dev << std::endl;
+            
+            output["mean"] = mean;
+            output["min"] = min_val;
+            output["max"] = max_val;
+            output["std_dev"] = std_dev;
+            output["samples_analyzed"] = data_size;
             
         } catch (const std::exception& e) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 1] ERROR: Invalid input value: " << e.what() << std::endl;
+                      << "[Task 1 - Data Analyzer] ERROR: " << e.what() << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
     } else if (task_id == "task_2") {
-        // Task 2: input = number, output = number + 1
-        if (!params.contains("input")) {
+        // ============================================================
+        // TASK 2: IMAGE PROCESSOR
+        // Simula elaborazione di immagini con filtri e trasformazioni
+        // Input: dimensioni immagine, tipo di filtro
+        // Output: immagine processata (simulata), tempo di elaborazione
+        // ============================================================
+        
+        if (!params.contains("image_width") || !params.contains("image_height")) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 2] ERROR: Missing 'input' parameter" << std::endl;
+                      << "[Task 2 - Image Processor] ERROR: Missing image dimensions" << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
         try {
-            int input_value = params["input"].is_string() ? std::stoi(params["input"].get<std::string>()) : params["input"].get<int>();   
-
-            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 2] Input: " << input_value << std::endl;
+            int width = params["image_width"].is_string() ? 
+                std::stoi(params["image_width"].get<std::string>()) : 
+                params["image_width"].get<int>();
+            int height = params["image_height"].is_string() ? 
+                std::stoi(params["image_height"].get<std::string>()) : 
+                params["image_height"].get<int>();
             
-            // Simula carico computazionale con loop
-            long long prev = 0, curr = 1, sum = 0;
-            for (int i = 0; i < 10000000; i++) {
-                sum = prev + curr;
-                prev = curr;
-                curr = sum;
-                if (i % 100000 == 0) {
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
-                    //std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                              //<< "[Task 2] Loop iteration " << i << ", sum = " << sum << std::endl;
+            std::string filter_type = params.value("filter", "gaussian");
+            
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 2 - Image Processor] Processing " << width << "x" << height 
+                      << " image with " << filter_type << " filter" << std::endl;
+            
+            int total_pixels = width * height;
+            
+            // Simula caricamento immagine
+            std::vector<std::vector<int>> image(height, std::vector<int>(width));
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    image[y][x] = (x + y) % 256;
                 }
             }
             
-            int output_value = input_value + 1;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 2 - Image Processor] Image loaded, applying filters..." << std::endl;
             
+            // Applica filtro Gaussian blur (3x3 kernel)
+            std::vector<std::vector<int>> processed(height, std::vector<int>(width));
+            int processed_pixels = 0;
+            
+            for (int y = 1; y < height - 1; y++) {
+                for (int x = 1; x < width - 1; x++) {
+                    // Convoluzione 3x3
+                    int sum = 0;
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dx = -1; dx <= 1; dx++) {
+                            sum += image[y + dy][x + dx];
+                        }
+                    }
+                    processed[y][x] = sum / 9;
+                    processed_pixels++;
+                    
+                    // Simula carico computazionale
+                    if (processed_pixels % 50000 == 0) {
+                        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+                        std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                                  << "[Task 2 - Image Processor] Processed " 
+                                  << (processed_pixels * 100 / total_pixels) << "% of pixels" << std::endl;
+                    }
+                }
+            }
+            
+            // Applica edge detection (Sobel operator)
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 2 - Image Processor] Applying edge detection..." << std::endl;
+            
+            int edge_count = 0;
+            for (int y = 1; y < height - 1; y++) {
+                for (int x = 1; x < width - 1; x++) {
+                    int gx = -processed[y-1][x-1] + processed[y-1][x+1] 
+                            -2*processed[y][x-1] + 2*processed[y][x+1]
+                            -processed[y+1][x-1] + processed[y+1][x+1];
+                    int gy = -processed[y-1][x-1] - 2*processed[y-1][x] - processed[y-1][x+1]
+                            +processed[y+1][x-1] + 2*processed[y+1][x] + processed[y+1][x+1];
+                    
+                    int gradient = std::abs(gx) + std::abs(gy);
+                    if (gradient > 128) edge_count++;
+                }
+                
+                if (y % 100 == 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                }
+            }
             
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 2] Output: " << input_value << " + 1 = " << output_value << std::endl;
+                      << "[Task 2 - Image Processor] Processing complete!" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 2 - Image Processor] Results:" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Total pixels: " << total_pixels << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Edges detected: " << edge_count << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Edge density: " << (edge_count * 100.0 / total_pixels) << "%" << std::endl;
             
-            output["result"] = output_value;
+            output["pixels_processed"] = total_pixels;
+            output["edges_detected"] = edge_count;
+            output["edge_density"] = edge_count * 100.0 / total_pixels;
+            output["filter_applied"] = filter_type;
             
         } catch (const std::exception& e) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 2] ERROR: Invalid input value: " << e.what() << std::endl;
+                      << "[Task 2 - Image Processor] ERROR: " << e.what() << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
     } else if (task_id == "task_3") {
-        // Task 3: input1 = output from task_2 (dep_output.result), input2 = another number, output = input1 * input2
-        if (!params.contains("dep_output") || !params.contains("input2")) {
+        // ============================================================
+        // TASK 3: REPORT GENERATOR
+        // Prende i risultati dell'analisi dati (Task 1) e genera un report
+        // con elaborazioni aggiuntive pesanti (simulazione ML, aggregazioni)
+        // Input: risultati da Task 1, parametri di configurazione
+        // Output: report completo con metriche avanzate
+        // ============================================================
+        
+        if (!params.contains("dep_output")) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 3] ERROR: Missing 'dep_output' or 'input2' parameter" << std::endl;
-            std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 3] Available parameters: " << params.dump() << std::endl;
+                      << "[Task 3 - Report Generator] ERROR: Missing dependency output from Task 1" << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
         try {
             json dep_output = params["dep_output"];
-            if (!dep_output.contains("result")) {
+            
+            if (!dep_output.contains("mean") || !dep_output.contains("std_dev")) {
                 std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                          << "[Task 3] ERROR: Missing 'result' in dep_output" << std::endl;
+                          << "[Task 3 - Report Generator] ERROR: Invalid data from Task 1" << std::endl;
                 return TASK_RESULT_FAILURE;
             }
             
-            int input1_value = dep_output["result"].is_string() ? std::stoi(dep_output["result"].get<std::string>()) : dep_output["result"].get<int>();
-            int input2_value = params["input2"].is_string() ? std::stoi(params["input2"].get<std::string>()) : params["input2"].get<int>();
+            double mean = dep_output["mean"].get<double>();
+            double min_val = dep_output["min"].get<double>();
+            double max_val = dep_output["max"].get<double>();
+            double std_dev = dep_output["std_dev"].get<double>();
+            int samples = dep_output["samples_analyzed"].get<int>();
             
-            // Sleep di 5 secondi
-            
-            std::this_thread::sleep_for(std::chrono::seconds(10));
-            
-            
-            int output_value = input1_value * input2_value;
+            int report_depth = params.value("report_depth", 3);
             
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 3] Input1 (from task_2): " << input1_value << std::endl;
+                      << "[Task 3 - Report Generator] Generating comprehensive report..." << std::endl;
             std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 3] Input2: " << input2_value << std::endl;
-            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 3] Output: " << input1_value << " * " << input2_value << " = " << output_value << std::endl;
+                      << "[Task 3 - Report Generator] Input data: " << samples << " samples" << std::endl;
             
-            output["result"] = output_value;
+            // Fase 1: Calcolo metriche avanzate
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] Phase 1/4: Computing advanced metrics..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            
+            double range = max_val - min_val;
+            double cv = (std_dev / mean) * 100.0; // Coefficient of variation
+            double z_score_max = (max_val - mean) / std_dev;
+            double z_score_min = (min_val - mean) / std_dev;
+            
+            // Fase 2: Simulazione analisi predittiva (ML)
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] Phase 2/4: Running predictive analysis (ML simulation)..." << std::endl;
+            
+            double prediction_accuracy = 0.0;
+            for (int i = 0; i < 100; i++) {
+                // Simula training di modello ML
+                double error = std::abs(std::sin(i * 0.1)) * std_dev;
+                prediction_accuracy += (1.0 - error / range);
+                
+                if (i % 20 == 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(800));
+                    std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                              << "[Task 3 - Report Generator] ML training progress: " << i << "%" << std::endl;
+                }
+            }
+            prediction_accuracy /= 100.0;
+            
+            // Fase 3: Generazione aggregazioni temporali
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] Phase 3/4: Computing temporal aggregations..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(3));
+            
+            std::vector<double> moving_averages;
+            int window_size = std::min(100, samples / 10);
+            for (int i = 0; i < 50; i++) {
+                double ma = mean + (std::sin(i * 0.2) * std_dev * 0.5);
+                moving_averages.push_back(ma);
+            }
+            
+            // Fase 4: Generazione visualizzazioni e export
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] Phase 4/4: Generating visualizations and exporting..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            
+            // Simula generazione grafici
+            for (int i = 0; i < report_depth; i++) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+                std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                          << "[Task 3 - Report Generator] Generated chart " << (i+1) << "/" << report_depth << std::endl;
+            }
+            
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] ============================================" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] COMPREHENSIVE ANALYSIS REPORT" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] ============================================" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] Basic Statistics:" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Samples: " << samples << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Mean: " << mean << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Range: " << range << " (Min: " << min_val << ", Max: " << max_val << ")" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Std Dev: " << std_dev << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] Advanced Metrics:" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Coefficient of Variation: " << cv << "%" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Z-Score Range: [" << z_score_min << ", " << z_score_max << "]" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Prediction Accuracy: " << (prediction_accuracy * 100) << "%" << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "  - Moving Averages Computed: " << moving_averages.size() << std::endl;
+            std::cout << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
+                      << "[Task 3 - Report Generator] ============================================" << std::endl;
+            
+            output["samples"] = samples;
+            output["mean"] = mean;
+            output["range"] = range;
+            output["std_dev"] = std_dev;
+            output["coefficient_of_variation"] = cv;
+            output["z_score_min"] = z_score_min;
+            output["z_score_max"] = z_score_max;
+            output["prediction_accuracy"] = prediction_accuracy;
+            output["moving_averages_count"] = static_cast<int>(moving_averages.size());
+            output["charts_generated"] = report_depth;
+            output["report_status"] = "complete";
             
         } catch (const std::exception& e) {
             std::cerr << "[" << std::setw(13) << get_absolute_time_ms() << " ms] "
-                      << "[Task 3] ERROR: Invalid input values: " << e.what() << std::endl;
+                      << "[Task 3 - Report Generator] ERROR: " << e.what() << std::endl;
             return TASK_RESULT_FAILURE;
         }
         
