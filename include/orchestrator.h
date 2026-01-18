@@ -20,6 +20,7 @@ struct TaskExecution {
     int64_t scheduled_time_us;
     int64_t actual_start_time_us;
     int64_t end_time_us;
+    int64_t estimated_duration_us;  // Added for duration checking
     TaskState state;
     TaskResult result;
     std::string error_message;

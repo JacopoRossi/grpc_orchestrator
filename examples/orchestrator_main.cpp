@@ -136,6 +136,19 @@ int main(int argc, char** argv) {
     std::cout << "Successful: " << success_count << std::endl;
     std::cout << "Failed: " << failure_count << std::endl;
     
+    // Check if tasks respected their estimated duration
+    std::cout << "\n=== Duration Check ===" << std::endl;
+    for (const auto& exec : history) {
+        int64_t actual_duration = exec.end_time_us - exec.actual_start_time_us;
+        if (actual_duration <= exec.estimated_duration_us) {
+            std::cout << exec.task_id << ": OKOK (actual: " << actual_duration 
+                      << " us <= estimated: " << exec.estimated_duration_us << " us)" << std::endl;
+        } else {
+            std::cout << exec.task_id << ": KOKO (actual: " << actual_duration 
+                      << " us > estimated: " << exec.estimated_duration_us << " us)" << std::endl;
+        }
+    }
+    
     // Stop orchestrator
     orchestrator.stop();
     

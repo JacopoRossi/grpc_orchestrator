@@ -20,11 +20,11 @@ schedule:
       address: "task1:50051"
       mode: timed
       scheduled_time_us: 5000000
-      deadline_us: 15000000              # 15 seconds
-      estimated_duration_us: 8000000     # ~8 seconds
+      deadline_us: 10000000              # 10 seconds (real: ~4s)
+      estimated_duration_us: 4100000     # ~4 seconds
       rt_policy: "fifo"                  # SCHED_FIFO
       rt_priority: 30                    # Lower RT priority
-      cpu_affinity: 0                    # CPU core 0
+      cpu_affinity: 1                    # CPU core 0
       parameters:
         data_size: 500000                # 500k data points to analyze
       
@@ -35,8 +35,8 @@ schedule:
       address: "task2:50052"
       mode: timed
       scheduled_time_us: 90000000         # Start at 2 seconds
-      deadline_us: 20000000              # 20 seconds
-      estimated_duration_us: 12000000    # ~12 seconds
+      deadline_us: 8000000               # 8 seconds (real: ~3.2s)
+      estimated_duration_us: 3300000     # ~3.2 seconds
       rt_policy: "fifo"                  # SCHED_FIFO
       rt_priority: 30                    # Lower RT priority
       cpu_affinity: 1                    # CPU core 1
@@ -52,11 +52,11 @@ schedule:
       address: "task3:50053"
       mode: sequential
       scheduled_time_us: 0
-      deadline_us: 25000000              # 25 seconds
-      estimated_duration_us: 15000000    # ~15 seconds (very heavy)
+      deadline_us: 20000000              # 20 seconds (real: ~16s)
+      estimated_duration_us: 17000000    # ~16 seconds (very heavy)
       rt_policy: "fifo"                  # SCHED_FIFO
       rt_priority: 30                    # Lower RT priority
-      cpu_affinity: 2                    # CPU core 2
+      cpu_affinity: 1                   # CPU core 2
       depends_on: task_1                 # Needs Task 1 output
       parameters:
         report_depth: 5                  # Number of charts to generate

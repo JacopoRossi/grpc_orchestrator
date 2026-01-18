@@ -351,6 +351,7 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
         exec.task_id = task.task_id;
         exec.scheduled_time_us = task.scheduled_time_us;
         exec.actual_start_time_us = get_current_time_us() - start_time_us_;  // Relative to start
+        exec.estimated_duration_us = task.estimated_duration_us;  // Save estimated duration
         exec.state = TASK_STATE_STARTING;
         exec.result = TASK_RESULT_UNKNOWN;
         
@@ -435,6 +436,7 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
         exec.scheduled_time_us = task.scheduled_time_us;
         exec.actual_start_time_us = get_current_time_us() - start_time_us_;  // Relative to start
         exec.end_time_us = exec.actual_start_time_us;
+        exec.estimated_duration_us = task.estimated_duration_us;  // Save estimated duration
         exec.state = TASK_STATE_FAILED;
         exec.result = TASK_RESULT_FAILURE;
         exec.error_message = status.error_message();
