@@ -2,7 +2,10 @@
 
 ## Overview
 
-The orchestrator uses a **globally synchronized time measurement system** based on `std::chrono::system_clock` to ensure accurate timing analysis across all containers.
+Il sistema utilizza un **modello centralizzato di misurazione dei tempi** dove **solo l'Orchestrator** misura i tempi di inizio e fine di ogni task. Questo garantisce:
+- ✅ Misurazione consistente e centralizzata
+- ✅ Nessuna dipendenza dai clock dei task
+- ✅ Semplicità e affidabilità
 
 ## Clock Selection
 
@@ -48,61 +51,62 @@ This ensures:
 
 ## Measured Metrics
 
-### 1. Task Execution Duration
+### 1. Task Start Time
 ```cpp
-execution_duration_us = end_time_us - start_time_us
+// In orchestrator.cpp::execute_task()
+int64_t task_start_time = get_current_time_us() - start_time_us_;
+exec.actual_start_time_us = task_start_time;
 ```
-- **Measured in**: Task container
+- **Measured by**: Orchestrator
+- **When**: IMMEDIATAMENTE prima di inviare il comando StartTask
 - **Precision**: Microseconds
-- **Reliability**: ✅ High (same clock source)
+- **Includes**: Setup time + gRPC communication
 
-### 2. Task Start Time (Absolute)
+### 2. Task End Time
 ```cpp
-start_time_us = get_current_time_us()  // system_clock
+// In orchestrator.cpp::on_task_end()
+int64_t task_end_time = get_current_time_us() - start_time_us_;
+exec.end_time_us = task_end_time;
 ```
-- **Measured in**: Task container
-- **Sent to**: Orchestrator via gRPC
-- **Comparable**: ✅ Yes (synchronized clock)
+- **Measured by**: Orchestrator
+- **When**: IMMEDIATAMENTE quando riceve la notifica TaskEnd
+- **Precision**: Microseconds
+- **Includes**: Task execution + gRPC communication back
 
-### 3. Task End Time (Absolute)
+### 3. Task Execution Duration (Measured by Orchestrator)
 ```cpp
-end_time_us = get_current_time_us()  // system_clock
+execution_duration_us = end_time_us - actual_start_time_us
 ```
-- **Measured in**: Task container
-- **Sent to**: Orchestrator via gRPC
-- **Comparable**: ✅ Yes (synchronized clock)
-
-### 4. Orchestrator Relative Time
-```cpp
-relative_time_us = get_current_time_us() - start_time_us_
-```
-- **Reference**: Orchestrator start time
-- **Used for**: Scheduling and internal timing
-- **Comparable with task times**: ✅ Yes (same clock)
+- **Calculated by**: Orchestrator
+- **Represents**: Tempo totale dal momento in cui l'orchestrator invia il comando fino a quando riceve la notifica di completamento
+- **Includes**: 
+  - Latenza gRPC andata
+  - Esecuzione del task
+  - Latenza gRPC ritorno
 
 ## Timing Guarantees
 
-### What You Can Rely On
+### Vantaggi del Modello Centralizzato
 
-✅ **Task execution duration** - Accurate to microseconds
-✅ **Task start/end timestamps** - Globally synchronized
-✅ **Event ordering** - Correct across all containers
-✅ **Scheduling precision** - Microsecond-level timing
-✅ **gRPC latency measurement** - Accurate end-to-end timing
-✅ **Performance analysis** - All metrics are comparable
+✅ **Misurazione consistente** - Un solo punto di misurazione elimina discrepanze
+✅ **Nessuna dipendenza dai task** - I task non devono preoccuparsi dei tempi
+✅ **Semplificazione** - Logica di timing concentrata nell'orchestrator
+✅ **Misurazione end-to-end** - Include latenza gRPC e overhead di comunicazione
+✅ **Affidabilità** - Solo il clock dell'orchestrator è rilevante
 
-### Potential Limitations
+### Cosa Misura
 
-⚠️ **System clock adjustments** - If the host system clock is adjusted (e.g., NTP sync), it may affect measurements in progress
-⚠️ **Container startup** - Small initial clock sync delay (~100ms)
+- **Start Time**: Momento in cui l'orchestrator decide di eseguire il task
+- **End Time**: Momento in cui l'orchestrator riceve conferma di completamento
+- **Duration**: Tempo totale percepito dall'orchestrator (include tutto l'overhead)
 
 ### Best Practices
 
-1. **Ensure host NTP is configured** for accurate time
-2. **Use UTC timezone** to avoid DST issues
-3. **Compare timestamps directly** - they are globally synchronized
-4. **Log absolute timestamps** for debugging and analysis
-5. **Calculate durations** using the provided `execution_duration_us` field
+1. **I task non misurano tempi** - Tutta la misurazione è gestita dall'orchestrator
+2. **Duration include overhead** - Tieni conto che include comunicazione gRPC
+3. **Tempi relativi** - Tutti i tempi sono relativi allo `start_time_us_` dell'orchestrator
+4. **Analisi performance** - Usa i tempi misurati per confrontare esecuzioni diverse
+5. **Logging** - L'orchestrator logga tutti i tempi in modo centralizzato
 
 ## Code References
 
@@ -126,28 +130,43 @@ int64_t TaskWrapper::get_current_time_us() const {
 
 ## Example Analysis
 
-With synchronized clocks, you can now accurately measure:
+Con il modello centralizzato:
 
 ```cpp
-// Task 1 starts at: 1704729600000000 µs (absolute)
-// Task 1 ends at:   1704729600500000 µs (absolute)
-// Duration:         500000 µs (0.5 seconds)
+// Orchestrator misura start time (prima di inviare StartTask)
+task_start_time = 1000000 µs  // (relativo a start_time_us_)
 
-// Orchestrator receives notification at: 1704729600500100 µs
-// gRPC latency: 100 µs
+// Orchestrator invia StartTask via gRPC
+// ... task esegue ...
+// Task invia TaskEnd notification
+
+// Orchestrator misura end time (quando riceve TaskEnd)
+task_end_time = 1500000 µs  // (relativo a start_time_us_)
+
+// Duration calcolata dall'orchestrator
+duration = 500000 µs (0.5 seconds)
+// Questa include: gRPC latency + execution + gRPC return
 ```
 
-All these timestamps are **directly comparable** and **globally accurate**.
+Tutti i tempi sono misurati dall'orchestrator con un **singolo clock di riferimento**.
 
 ## Migration Notes
 
-### Changed from `steady_clock` to `system_clock`
+### Cambiamento: Da Task Measurement a Orchestrator-Only Measurement
 
-**Before**: Each container had independent `steady_clock` - timestamps were not comparable
-**After**: All containers share `system_clock` - full global synchronization
+**Prima**: 
+- I task misuravano `start_time_us` e `end_time_us`
+- Inviavano i tempi all'orchestrator via gRPC
+- L'orchestrator usava i tempi ricevuti dai task
+
+**Dopo**:
+- Solo l'orchestrator misura i tempi
+- Task start: misurato PRIMA di chiamare `StartTask()`
+- Task end: misurato QUANDO si riceve `TaskEnd()` notification
+- I task non devono più preoccuparsi della misurazione del tempo
 
 **Impact**: 
-- ✅ More accurate cross-container timing
-- ✅ Reliable performance metrics
-- ✅ Correct event ordering
-- ⚠️ Requires host clock synchronization (NTP recommended)
+- ✅ Semplificazione del codice dei task
+- ✅ Misurazione più affidabile e centralizzata
+- ✅ Nessuna dipendenza da sincronizzazione clock tra container
+- ✅ Duration include l'overhead completo (più realistico)

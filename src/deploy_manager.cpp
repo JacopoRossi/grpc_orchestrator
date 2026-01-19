@@ -119,52 +119,49 @@ bool DeployManager::remove_network() {
     return execute_command_bool(command);
 }
 
+namespace {
+    void add_docker_base_options(std::stringstream& cmd, const std::string& name, 
+                                const std::string& hostname, const std::string& network,
+                                const std::vector<std::string>& caps, const std::string& cpuset,
+                                int64_t memlock) {
+        cmd << "docker run -d";
+        cmd << " --name " << name;
+        cmd << " --hostname " << hostname;
+        cmd << " --network " << network;
+        
+        for (const auto& cap : caps) {
+            cmd << " --cap-add=" << cap;
+        }
+        
+        if (!cpuset.empty()) {
+            cmd << " --cpuset-cpus=" << cpuset;
+        }
+        
+        cmd << " --ulimit memlock=" << memlock;
+        cmd << " --ulimit rtprio=99 --ulimit rttime=-1";
+        cmd << " --security-opt seccomp:unconfined";
+        cmd << " -e DOCKER_CONTAINER=true -e TZ=UTC";
+    }
+}
+
 std::string DeployManager::generate_orchestrator_run_command() {
     std::stringstream cmd;
+    auto& orc = config_.orchestrator;
     
-    cmd << "docker run -d";
-    cmd << " --name " << config_.orchestrator.container_name;
-    cmd << " --hostname " << config_.orchestrator.hostname;
-    cmd << " --network " << config_.network_name;
+    add_docker_base_options(cmd, orc.container_name, orc.hostname, config_.network_name,
+                           orc.capabilities, orc.cpuset, orc.memlock);
+    
     cmd << " -p 50050:50050";
-    
-    // Capabilities
-    for (const auto& cap : config_.orchestrator.capabilities) {
-        cmd << " --cap-add=" << cap;
-    }
-    
-    // CPU set
-    if (!config_.orchestrator.cpuset.empty()) {
-        cmd << " --cpuset-cpus=" << config_.orchestrator.cpuset;
-    }
-    
-    // Memory lock
-    cmd << " --ulimit memlock=" << config_.orchestrator.memlock;
-    cmd << " --ulimit rtprio=99";
-    cmd << " --ulimit rttime=-1";
-    
-    // Security
-    cmd << " --security-opt seccomp:unconfined";
-    
-    // Environment
-    cmd << " -e DOCKER_CONTAINER=true";
-    cmd << " -e TZ=UTC";
-    
-    // Image
-    cmd << " " << config_.orchestrator.image;
-    
-    // Command
+    cmd << " " << orc.image;
     cmd << " ./orchestrator_main";
-    cmd << " --address " << config_.orchestrator.address;
-    cmd << " --schedule " << config_.orchestrator.schedule_file;
+    cmd << " --address " << orc.address;
+    cmd << " --schedule " << orc.schedule_file;
     
-    if (config_.orchestrator.rt_policy != "none") {
-        cmd << " --policy " << config_.orchestrator.rt_policy;
-        cmd << " --priority " << config_.orchestrator.rt_priority;
-        cmd << " --cpu-affinity " << config_.orchestrator.rt_cpu_affinity;
-        if (config_.orchestrator.lock_memory) {
-            cmd << " --lock-memory";
-        }
+    if (orc.rt_policy != "none") {
+        cmd << " --policy " << orc.rt_policy;
+        cmd << " --priority " << orc.rt_priority;
+        cmd << " --cpu-affinity " << orc.rt_cpu_affinity;
+        if (orc.lock_memory) cmd << " --lock-memory";
     }
     
     return cmd.str();
@@ -173,39 +170,12 @@ std::string DeployManager::generate_orchestrator_run_command() {
 std::string DeployManager::generate_docker_run_command(const ContainerConfig& config) {
     std::stringstream cmd;
     
-    cmd << "docker run -d";
-    cmd << " --name " << config.container_name;
-    cmd << " --hostname " << config.hostname;
-    cmd << " --network " << config_.network_name;
+    add_docker_base_options(cmd, config.container_name, config.hostname, config_.network_name,
+                           config.capabilities, config.cpuset, config.memlock);
+    
     cmd << " -p " << config.port << ":" << config.port;
-    
-    // Capabilities
-    for (const auto& cap : config.capabilities) {
-        cmd << " --cap-add=" << cap;
-    }
-    
-    // CPU set (if specified)
-    if (!config.cpuset.empty()) {
-        cmd << " --cpuset-cpus=" << config.cpuset;
-    }
-    
-    // Memory lock
-    cmd << " --ulimit memlock=" << config.memlock;
-    cmd << " --ulimit rtprio=99";
-    cmd << " --ulimit rttime=-1";
-    
-    // Security
-    cmd << " --security-opt seccomp:unconfined";
-    
-    // Environment
     cmd << " -e TASK_ID=" << config.id;
-    cmd << " -e DOCKER_CONTAINER=true";
-    cmd << " -e TZ=UTC";
-    
-    // Image
     cmd << " " << config.image;
-    
-    // Command
     cmd << " ./task_runner";
     cmd << " --name " << config.task_type;
     cmd << " --address " << config.address;
@@ -419,11 +389,58 @@ std::vector<std::string> DeployManager::get_running_containers() {
     return containers;
 }
 
+void DeployManager::follow_logs(const std::string& container_name) {
+    if (container_name.empty()) {
+        // Follow logs di tutti i container
+        std::vector<std::string> containers = get_running_containers();
+        if (containers.empty()) {
+            std::cout << "[DeployManager] No running containers found" << std::endl;
+            return;
+        }
+        
+        std::cout << "[DeployManager] Following logs for all containers (Ctrl+C to stop)..." << std::endl;
+        std::cout << "Containers: ";
+        for (const auto& c : containers) {
+            std::cout << c << " ";
+        }
+        std::cout << std::endl << std::endl;
+        
+        // Usa docker-compose logs se disponibile, altrimenti docker logs multipli
+        std::string cmd = "docker logs -f --tail=50 " + containers[0];
+        for (size_t i = 1; i < containers.size(); i++) {
+            cmd += " & docker logs -f --tail=50 " + containers[i];
+        }
+        cmd += " & wait";
+        
+        system(cmd.c_str());
+    } else {
+        // Follow logs di un container specifico
+        std::cout << "[DeployManager] Following logs for: " << container_name << " (Ctrl+C to stop)..." << std::endl;
+        std::string cmd = "docker logs -f --tail=100 " + container_name;
+        system(cmd.c_str());
+    }
+}
+
+// Helper functions for YAML parsing
+namespace {
+    template<typename T>
+    T get_yaml(const YAML::Node& node, const std::string& key, T default_val = T()) {
+        return node[key] ? node[key].as<T>() : default_val;
+    }
+    
+    void parse_capabilities(const YAML::Node& node, std::vector<std::string>& caps) {
+        if (node["capabilities"]) {
+            for (const auto& cap : node["capabilities"]) {
+                caps.push_back(cap.as<std::string>());
+            }
+        }
+    }
+}
+
 // Parser implementation
 DeploymentConfig DeploymentConfigParser::parse_yaml(const std::string& yaml_path) {
     YAML::Node config = YAML::LoadFile(yaml_path);
     DeploymentConfig deployment;
-    
     YAML::Node deploy = config["deployment"];
     
     // Basic info
@@ -437,50 +454,44 @@ DeploymentConfig DeploymentConfigParser::parse_yaml(const std::string& yaml_path
     
     // Orchestrator
     YAML::Node orch = deploy["orchestrator"];
-    deployment.orchestrator.container_name = orch["container_name"].as<std::string>();
-    deployment.orchestrator.hostname = orch["hostname"].as<std::string>();
-    deployment.orchestrator.image = orch["image"].as<std::string>();
-    deployment.orchestrator.dockerfile = orch["dockerfile"].as<std::string>();
-    deployment.orchestrator.address = orch["address"].as<std::string>();
-    deployment.orchestrator.schedule_file = orch["schedule_file"].as<std::string>();
+    auto& orc = deployment.orchestrator;
+    orc.container_name = orch["container_name"].as<std::string>();
+    orc.hostname = orch["hostname"].as<std::string>();
+    orc.image = orch["image"].as<std::string>();
+    orc.dockerfile = orch["dockerfile"].as<std::string>();
+    orc.address = orch["address"].as<std::string>();
+    orc.schedule_file = orch["schedule_file"].as<std::string>();
     
     // Orchestrator RT config
     if (orch["rt_config"]) {
         YAML::Node rt = orch["rt_config"];
-        deployment.orchestrator.rt_policy = rt["policy"].as<std::string>();
-        deployment.orchestrator.rt_priority = rt["priority"].as<int>();
-        deployment.orchestrator.rt_cpu_affinity = rt["cpu_affinity"].as<int>();
-        deployment.orchestrator.lock_memory = rt["lock_memory"].as<bool>();
+        orc.rt_policy = get_yaml<std::string>(rt, "policy");
+        orc.rt_priority = get_yaml<int>(rt, "priority");
+        orc.rt_cpu_affinity = get_yaml<int>(rt, "cpu_affinity");
+        orc.lock_memory = get_yaml<bool>(rt, "lock_memory");
     }
     
     // Orchestrator resources
     if (orch["resources"]) {
         YAML::Node res = orch["resources"];
-        deployment.orchestrator.cpuset = res["cpuset"].as<std::string>();
-        deployment.orchestrator.memlock = res["memlock"].as<int64_t>();
+        orc.cpuset = get_yaml<std::string>(res, "cpuset");
+        orc.memlock = get_yaml<int64_t>(res, "memlock");
     }
     
-    // Orchestrator capabilities
-    if (orch["capabilities"]) {
-        for (const auto& cap : orch["capabilities"]) {
-            deployment.orchestrator.capabilities.push_back(cap.as<std::string>());
-        }
-    }
+    parse_capabilities(orch, orc.capabilities);
     
     // Orchestrator healthcheck
     if (orch["healthcheck"]) {
         YAML::Node hc = orch["healthcheck"];
-        deployment.orchestrator.healthcheck_command = hc["command"].as<std::string>();
-        deployment.orchestrator.healthcheck_interval = hc["interval"].as<int>();
-        deployment.orchestrator.healthcheck_timeout = hc["timeout"].as<int>();
-        deployment.orchestrator.healthcheck_retries = hc["retries"].as<int>();
+        orc.healthcheck_command = get_yaml<std::string>(hc, "command");
+        orc.healthcheck_interval = get_yaml<int>(hc, "interval");
+        orc.healthcheck_timeout = get_yaml<int>(hc, "timeout");
+        orc.healthcheck_retries = get_yaml<int>(hc, "retries");
     }
     
     // Tasks
-    YAML::Node tasks = deploy["tasks"];
-    for (const auto& task_node : tasks) {
+    for (const auto& task_node : deploy["tasks"]) {
         ContainerConfig task;
-        
         task.id = task_node["id"].as<std::string>();
         task.container_name = task_node["container_name"].as<std::string>();
         task.hostname = task_node["hostname"].as<std::string>();
@@ -493,34 +504,27 @@ DeploymentConfig DeploymentConfigParser::parse_yaml(const std::string& yaml_path
         // RT config
         if (task_node["rt_config"]) {
             YAML::Node rt = task_node["rt_config"];
-            task.rt_policy = rt["policy"].as<std::string>();
-            task.rt_priority = rt["priority"].as<int>();
-            task.rt_cpu_affinity = rt["cpu_affinity"].as<int>();
+            task.rt_policy = get_yaml<std::string>(rt, "policy");
+            task.rt_priority = get_yaml<int>(rt, "priority");
+            task.rt_cpu_affinity = get_yaml<int>(rt, "cpu_affinity");
         }
         
         // Resources
         if (task_node["resources"]) {
             YAML::Node res = task_node["resources"];
-            if (res["cpuset"]) {
-                task.cpuset = res["cpuset"].as<std::string>();
-            }
-            task.memlock = res["memlock"].as<int64_t>();
+            task.cpuset = get_yaml<std::string>(res, "cpuset");
+            task.memlock = get_yaml<int64_t>(res, "memlock");
         }
         
-        // Capabilities
-        if (task_node["capabilities"]) {
-            for (const auto& cap : task_node["capabilities"]) {
-                task.capabilities.push_back(cap.as<std::string>());
-            }
-        }
+        parse_capabilities(task_node, task.capabilities);
         
         // Healthcheck
         if (task_node["healthcheck"]) {
             YAML::Node hc = task_node["healthcheck"];
-            task.healthcheck_command = hc["command"].as<std::string>();
-            task.healthcheck_interval = hc["interval"].as<int>();
-            task.healthcheck_timeout = hc["timeout"].as<int>();
-            task.healthcheck_retries = hc["retries"].as<int>();
+            task.healthcheck_command = get_yaml<std::string>(hc, "command");
+            task.healthcheck_interval = get_yaml<int>(hc, "interval");
+            task.healthcheck_timeout = get_yaml<int>(hc, "timeout");
+            task.healthcheck_retries = get_yaml<int>(hc, "retries");
         }
         
         deployment.tasks.push_back(task);

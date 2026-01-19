@@ -9,6 +9,13 @@ using json = nlohmann::json;
 
 namespace orchestrator {
 
+namespace {
+    void log_task(const std::string& task_id, int64_t time_ms, const std::string& msg) {
+        std::cout << "[" << std::setw(13) << time_ms << " ms] [Task " << task_id << "] " 
+                  << msg << std::endl;
+    }
+}
+
 // ============================================================================
 // TaskServiceImpl Implementation
 // ============================================================================
@@ -21,9 +28,7 @@ grpc::Status TaskServiceImpl::StartTask(
     const StartTaskRequest* request,
     StartTaskResponse* response) {
     
-    std::cout << "[" << std::setw(13) << wrapper_->get_relative_time_ms() << " ms] "
-              << "[Task " << wrapper_->get_task_id() 
-              << "] Received start command" << std::endl;
+    log_task(wrapper_->get_task_id(), wrapper_->get_relative_time_ms(), "Received start command");
     
     if (wrapper_->get_state() != TASK_STATE_IDLE) {
         response->set_success(false);
@@ -31,7 +36,6 @@ grpc::Status TaskServiceImpl::StartTask(
         return grpc::Status::OK;
     }
     
-    // Execute task
     wrapper_->execute_task(*request);
     
     response->set_success(true);
@@ -47,9 +51,7 @@ grpc::Status TaskServiceImpl::StopTask(
     const StopTaskRequest* request,
     StopTaskResponse* response) {
     
-    std::cout << "[" << std::setw(13) << wrapper_->get_relative_time_ms() << " ms] "
-              << "[Task " << wrapper_->get_task_id() 
-              << "] Received stop command" << std::endl;
+    log_task(wrapper_->get_task_id(), wrapper_->get_relative_time_ms(), "Received stop command");
     
     // Request graceful stop
     wrapper_->stop();

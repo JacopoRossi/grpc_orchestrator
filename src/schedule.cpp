@@ -11,46 +11,35 @@ namespace orchestrator {
 
 // Helper function to convert YAML node to JSON value while preserving types
 static json yaml_to_json(const YAML::Node& node) {
-    switch (node.Type()) {
-        case YAML::NodeType::Null:
-            return nullptr;
-        case YAML::NodeType::Scalar: {
-            // Try to determine the type
-            try {
-                // Try int first
-                return node.as<int>();
-            } catch (...) {
-                try {
-                    // Try double
-                    return node.as<double>();
-                } catch (...) {
-                    try {
-                        // Try bool
-                        return node.as<bool>();
-                    } catch (...) {
-                        // Default to string
-                        return node.as<std::string>();
-                    }
-                }
-            }
-        }
-        case YAML::NodeType::Sequence: {
-            json arr = json::array();
-            for (const auto& item : node) {
-                arr.push_back(yaml_to_json(item));
-            }
-            return arr;
-        }
-        case YAML::NodeType::Map: {
-            json obj = json::object();
-            for (const auto& pair : node) {
-                obj[pair.first.as<std::string>()] = yaml_to_json(pair.second);
-            }
-            return obj;
-        }
-        default:
-            return node.as<std::string>();
+    if (node.IsNull()) return nullptr;
+    
+    if (node.IsScalar()) {
+        try { return node.as<int>(); } catch (...) {}
+        try { return node.as<double>(); } catch (...) {}
+        try { return node.as<bool>(); } catch (...) {}
+        return node.as<std::string>();
     }
+    
+    if (node.IsSequence()) {
+        json arr = json::array();
+        for (const auto& item : node) arr.push_back(yaml_to_json(item));
+        return arr;
+    }
+    
+    if (node.IsMap()) {
+        json obj = json::object();
+        for (const auto& pair : node) {
+            obj[pair.first.as<std::string>()] = yaml_to_json(pair.second);
+        }
+        return obj;
+    }
+    
+    return node.as<std::string>();
+}
+
+template<typename T>
+T get_or_default(const YAML::Node& node, const std::string& key, T default_val) {
+    return node[key] ? node[key].as<T>() : default_val;
 }
 
 TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
@@ -73,18 +62,11 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
             }
             
             // Parse defaults
-            int64_t default_deadline_us = 1000000;
-            std::string default_rt_policy = "none";
-            int default_rt_priority = 50;
-            int default_cpu_affinity = -1;
-            
-            if (sched["defaults"]) {
-                YAML::Node defaults = sched["defaults"];
-                if (defaults["deadline_us"]) default_deadline_us = defaults["deadline_us"].as<int64_t>();
-                if (defaults["rt_policy"]) default_rt_policy = defaults["rt_policy"].as<std::string>();
-                if (defaults["rt_priority"]) default_rt_priority = defaults["rt_priority"].as<int>();
-                if (defaults["cpu_affinity"]) default_cpu_affinity = defaults["cpu_affinity"].as<int>();
-            }
+            YAML::Node defaults = sched["defaults"];
+            int64_t default_deadline_us = get_or_default(defaults, "deadline_us", 1000000L);
+            std::string default_rt_policy = get_or_default<std::string>(defaults, "rt_policy", "none");
+            int default_rt_priority = get_or_default(defaults, "rt_priority", 50);
+            int default_cpu_affinity = get_or_default(defaults, "cpu_affinity", -1);
             
             // Check if running in Docker
             const char* docker_env = std::getenv("DOCKER_CONTAINER");
@@ -94,41 +76,29 @@ TaskSchedule ScheduleParser::parse_yaml(const std::string& yaml_path) {
             if (sched["tasks"]) {
                 YAML::Node tasks = sched["tasks"];
                 
-                for (size_t i = 0; i < tasks.size(); i++) {
-                    YAML::Node task_node = tasks[i];
+                for (const auto& task_node : tasks) {
                     ScheduledTask task;
                     
                     // Required fields
                     task.task_id = task_node["id"].as<std::string>();
-                    
-                    // Address: use as-is from YAML (no conversion)
                     task.task_address = task_node["address"].as<std::string>();
                     
                     // Execution mode
                     std::string mode = task_node["mode"].as<std::string>();
-                    if (mode == "sequential") {
-                        task.execution_mode = TASK_MODE_SEQUENTIAL;
-                        task.scheduled_time_us = 0;
-                    } else if (mode == "timed") {
-                        task.execution_mode = TASK_MODE_TIMED;
-                        task.scheduled_time_us = task_node["scheduled_time_us"].as<int64_t>();
-                    }
+                    task.execution_mode = (mode == "sequential") ? TASK_MODE_SEQUENTIAL : TASK_MODE_TIMED;
+                    task.scheduled_time_us = (mode == "timed") ? task_node["scheduled_time_us"].as<int64_t>() : 0;
                     
                     // Dependencies
-                    if (task_node["depends_on"]) {
-                        task.wait_for_task_id = task_node["depends_on"].as<std::string>();
-                    } else {
-                        task.wait_for_task_id = "";
-                    }
+                    task.wait_for_task_id = get_or_default<std::string>(task_node, "depends_on", "");
                     
                     // Optional fields with defaults
-                    task.deadline_us = task_node["deadline_us"] ? task_node["deadline_us"].as<int64_t>() : default_deadline_us;
-                    task.estimated_duration_us = task_node["estimated_duration_us"] ? task_node["estimated_duration_us"].as<int64_t>() : 1000000;
+                    task.deadline_us = get_or_default(task_node, "deadline_us", default_deadline_us);
+                    task.estimated_duration_us = get_or_default(task_node, "estimated_duration_us", 1000000L);
                     
                     // Real-time configuration
-                    task.rt_policy = task_node["rt_policy"] ? task_node["rt_policy"].as<std::string>() : default_rt_policy;
-                    task.rt_priority = task_node["rt_priority"] ? task_node["rt_priority"].as<int>() : default_rt_priority;
-                    task.cpu_affinity = task_node["cpu_affinity"] ? task_node["cpu_affinity"].as<int>() : default_cpu_affinity;
+                    task.rt_policy = get_or_default(task_node, "rt_policy", default_rt_policy);
+                    task.rt_priority = get_or_default(task_node, "rt_priority", default_rt_priority);
+                    task.cpu_affinity = get_or_default(task_node, "cpu_affinity", default_cpu_affinity);
                     
                     // Parameters - convert to JSON
                     json params_obj = json::object();
@@ -181,77 +151,34 @@ TaskSchedule ScheduleParser::parse_json(const std::string& json_str) {
 
 TaskSchedule ScheduleParser::create_test_schedule() {
     TaskSchedule schedule;
-    
     schedule.time_horizon_start_us = 0;
     schedule.time_horizon_end_us = 10000000;  // 10 seconds
     schedule.tick_duration_us = 1000;         // 1ms
     
-    // Check if running in Docker (use hostname) or locally (use localhost)
-    const char* docker_env = std::getenv("DOCKER_CONTAINER");
-    bool use_docker_hostnames = (docker_env != nullptr);
+    bool use_docker = (std::getenv("DOCKER_CONTAINER") != nullptr);
+    auto addr = [use_docker](const std::string& host, int port) {
+        return use_docker ? host + ":" + std::to_string(port) : "localhost:" + std::to_string(port);
+    };
     
     // Task 1: Execute immediately (sequential mode)
-    ScheduledTask task1;
-    task1.task_id = "task_1";
-    task1.task_address = use_docker_hostnames ? "task1:50051" : "localhost:50051";
-    task1.scheduled_time_us = 0;        // Start immediately
-    task1.deadline_us = 3000000;        // 2 seconds
-    json params1;
-    params1["mode"] = "fast";
-    params1["iterations"] = "100";
-    params1["task_id"] = "task_1";
-    task1.parameters_json = params1.dump();
-    task1.estimated_duration_us = 500000;  // 500ms
-    task1.execution_mode = TASK_MODE_SEQUENTIAL;  // Sequential
-    task1.wait_for_task_id = "";        // No dependency
-    task1.rt_policy = "none";
-    task1.rt_priority = 50;
-    task1.cpu_affinity = -1;
+    ScheduledTask task1{"task_1", addr("task1", 50051), 0, 3000000, 
+                        json{{"mode", "fast"}, {"iterations", "100"}, {"task_id", "task_1"}}.dump(),
+                        TASK_MODE_SEQUENTIAL, "", 500000, "none", 50, -1};
     
-    // Task 2: Execute at 2 seconds (timed mode)
-    ScheduledTask task2;
-    task2.task_id = "task_2";
-    task2.task_address = use_docker_hostnames ? "task2:50052" : "localhost:50052";
-    task2.scheduled_time_us = 8000000;  // 2 seconds from start
-    task2.deadline_us = 1000000;        // 3 seconds
-    json params2;
-    params2["mode"] = "normal";
-    params2["data_size"] = "1024";
-    params2["task_id"] = "task_2";
-    task2.parameters_json = params2.dump();
-    task2.estimated_duration_us = 800000;  // 800ms
-    task2.execution_mode = TASK_MODE_TIMED;  // Timed execution
-    task2.wait_for_task_id = "";        // No dependency
-    task2.rt_policy = "none";
-    task2.rt_priority = 50;
-    task2.cpu_affinity = -1;
+    // Task 2: Execute at 8 seconds (timed mode)
+    ScheduledTask task2{"task_2", addr("task2", 50052), 8000000, 1000000,
+                        json{{"mode", "normal"}, {"data_size", "1024"}, {"task_id", "task_2"}}.dump(),
+                        TASK_MODE_TIMED, "", 800000, "none", 50, -1};
     
     // Task 3: Execute after task_1 completes (sequential mode)
-    ScheduledTask task3;
-    task3.task_id = "task_3";
-    task3.task_address = use_docker_hostnames ? "task3:50053" : "localhost:50053";
-    task3.scheduled_time_us = 0;        // Time doesn't matter in sequential mode
-    task3.deadline_us = 5000000;        // 5 seconds
-    json params3;
-    params3["mode"] = "slow";
-    params3["quality"] = "high";
-    params3["task_id"] = "task_3";
-    task3.parameters_json = params3.dump();
-    task3.estimated_duration_us = 1500000;  // 1.5 seconds
-    task3.execution_mode = TASK_MODE_SEQUENTIAL;  // Sequential
-    task3.wait_for_task_id = "task_1";  // Wait for task_1 to complete
-    task3.rt_policy = "none";
-    task3.rt_priority = 50;
-    task3.cpu_affinity = -1;
+    ScheduledTask task3{"task_3", addr("task3", 50053), 0, 5000000,
+                        json{{"mode", "slow"}, {"quality", "high"}, {"task_id", "task_3"}}.dump(),
+                        TASK_MODE_SEQUENTIAL, "task_1", 1500000, "none", 50, -1};
     
-    schedule.tasks.push_back(task1);
-    schedule.tasks.push_back(task2);
-    schedule.tasks.push_back(task3);
+    schedule.tasks = {task1, task2, task3};
     
-    std::cout << "[ScheduleParser] Created test schedule with " 
-              << schedule.tasks.size() << " tasks" 
-              << (use_docker_hostnames ? " (Docker mode)" : " (Local mode)")
-              << std::endl;
+    std::cout << "[ScheduleParser] Created test schedule with " << schedule.tasks.size() 
+              << " tasks" << (use_docker ? " (Docker mode)" : " (Local mode)") << std::endl;
     
     return schedule;
 }

@@ -21,6 +21,7 @@ struct TaskExecution {
     int64_t actual_start_time_us;
     int64_t end_time_us;
     int64_t estimated_duration_us;  // Added for duration checking
+    int64_t context_switch_time_us;  // Time between previous task end and this task start
     TaskState state;
     TaskResult result;
     std::string error_message;
@@ -110,6 +111,7 @@ private:
     std::vector<TaskExecution> completed_tasks_;
     std::unordered_map<std::string, bool> task_completed_;  // Track completed tasks for dependencies
     std::unordered_map<std::string, std::string> task_outputs_;  // Store task outputs as JSON
+    int64_t last_task_end_time_us_;  // Track last task end time for context switch measurement
     
     // Synchronization
     std::condition_variable completion_cv_;

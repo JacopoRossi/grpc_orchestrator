@@ -102,7 +102,7 @@ public:
     
     // Deploy containers
     bool deploy_all();
-    bool deploy_tasks_only();  // Deploy only task containers
+    bool deploy_tasks_only();
     bool deploy_orchestrator();
     bool deploy_task(const ContainerConfig& task_config);
     
@@ -125,6 +125,9 @@ public:
     // Status
     void print_status();
     std::vector<std::string> get_running_containers();
+    
+    // Logs
+    void follow_logs(const std::string& container_name = "");
     
     // Getters
     const DeploymentConfig& get_config() const { return config_; }

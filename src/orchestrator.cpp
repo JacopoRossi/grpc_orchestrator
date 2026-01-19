@@ -4,11 +4,24 @@
 #include <chrono>
 #include <algorithm>
 #include <pthread.h>
+#include <cstdint>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
 
 namespace orchestrator {
+
+// Helper functions
+namespace {
+    int64_t get_timestamp_ms() {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+    
+    void log_with_timestamp(const std::string& msg) {
+        std::cout << "[" << std::setw(13) << get_timestamp_ms() << " ms] " << msg << std::endl;
+    }
+}
 
 // ============================================================================
 // OrchestratorServiceImpl Implementation
@@ -22,13 +35,9 @@ grpc::Status OrchestratorServiceImpl::NotifyTaskEnd(
     const TaskEndNotification* request,
     TaskEndResponse* response) {
     
-    int64_t absolute_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
-    std::cout << "[" << std::setw(13) << absolute_time_ms << " ms] "
-              << "← Task " << request->task_id() 
-              << " completed (result: " << request->result() 
-              << ", duration: " << request->execution_duration_us() / 1000.0 << " ms)" 
-              << std::endl;
+    log_with_timestamp("← Task " + request->task_id() + 
+                      " completed (result: " + std::to_string(request->result()) +
+                      ", duration: " + std::to_string(request->execution_duration_us() / 1000.0) + " ms)");
     
     orchestrator_->on_task_end(*request);
     
@@ -61,7 +70,8 @@ Orchestrator::Orchestrator(const std::string& listen_address)
     , next_task_index_(0)
     , start_time_us_(0)
     , running_(false)
-    , pending_tasks_(0) {
+    , pending_tasks_(0)
+    , last_task_end_time_us_(0) {
     
     service_ = std::make_unique<OrchestratorServiceImpl>(this);
 }
@@ -171,6 +181,9 @@ std::vector<TaskExecution> Orchestrator::get_execution_history() const {
 }
 
 void Orchestrator::on_task_end(const TaskEndNotification& notification) {
+    // Measure end time IMMEDIATELY when notification arrives
+    int64_t task_end_time = get_current_time_us() - start_time_us_;
+    
     std::lock_guard<std::mutex> lock(mutex_);
     
     auto it = active_tasks_.find(notification.task_id());
@@ -180,38 +193,33 @@ void Orchestrator::on_task_end(const TaskEndNotification& notification) {
         return;
     }
     
+    // Update task execution state
     TaskExecution& exec = it->second;
-    exec.end_time_us = notification.end_time_us() - start_time_us_;  // Relative to start
+    exec.end_time_us = task_end_time;  // Measured by orchestrator
     exec.state = TASK_STATE_COMPLETED;
     exec.result = notification.result();
     exec.error_message = notification.error_message();
-    
-    // Store output data
     exec.output_data_json = notification.output_data_json();
-    task_outputs_[notification.task_id()] = exec.output_data_json;
     
-    // Log output data if present
+    // Update last task end time for context switch measurement
+    last_task_end_time_us_ = task_end_time;
+    
+    // Store output for dependent tasks
+    task_outputs_[notification.task_id()] = exec.output_data_json;
     if (!exec.output_data_json.empty() && exec.output_data_json != "{}") {
-        std::cout << "[Orchestrator] Task " << notification.task_id() << " output: " 
-                  << exec.output_data_json << std::endl;
+        std::cout << "[Orchestrator] Task " << notification.task_id() 
+                  << " output: " << exec.output_data_json << std::endl;
     }
     
-    // Log already printed in NotifyTaskEnd
-    
-    // Move to completed tasks
+    // Move to completed tasks and mark as done
     completed_tasks_.push_back(exec);
     active_tasks_.erase(it);
-    
-    // Mark task as completed for dependency tracking
     task_completed_[notification.task_id()] = true;
     
-    // Decrement pending tasks counter
+    // Notify waiting tasks and check for completion
     --pending_tasks_;
+    task_end_cv_.notify_all();
     
-    // Notify that a task has ended (for sequential execution)
-    task_end_cv_.notify_all();  // Use notify_all to wake up all waiting tasks
-    
-    // Check if all tasks are done
     if (pending_tasks_ == 0 && next_task_index_ >= schedule_.tasks.size()) {
         completion_cv_.notify_all();
     }
@@ -230,11 +238,8 @@ void Orchestrator::scheduler_loop() {
     std::cout << "\n[Orchestrator] === PHASE 1: Launching TIMED tasks ===\n" << std::endl;
     for (const ScheduledTask& task : schedule_.tasks) {
         if (task.execution_mode == TASK_MODE_TIMED) {
-            int64_t absolute_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
-            std::cout << "[" << std::setw(13) << absolute_time_ms << " ms] "
-                      << "→ Launching TIMED task: " << task.task_id 
-                      << " (scheduled at " << task.scheduled_time_us / 1000 << " ms)" << std::endl;
+            log_with_timestamp("→ Launching TIMED task: " + task.task_id + 
+                             " (scheduled at " + std::to_string(task.scheduled_time_us / 1000) + " ms)");
             
             // Launch task on separate thread
             {
@@ -266,10 +271,7 @@ void Orchestrator::scheduler_loop() {
             
             // Check if we need to wait for a dependency
             if (!task.wait_for_task_id.empty()) {
-                int64_t wait_start_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now().time_since_epoch()).count();
-                std::cout << "[" << std::setw(13) << wait_start_ms << " ms] "
-                          << "⏸ Waiting for " << task.wait_for_task_id << " to complete..." << std::endl;
+                log_with_timestamp("⏸ Waiting for " + task.wait_for_task_id + " to complete...");
                 
                 std::unique_lock<std::mutex> lock(mutex_);
                 task_end_cv_.wait(lock, [this, &task]() {
@@ -281,21 +283,15 @@ void Orchestrator::scheduler_loop() {
                     break;
                 }
                 
-                int64_t wait_end_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::system_clock::now().time_since_epoch()).count();
-                std::cout << "[" << std::setw(13) << wait_end_ms << " ms] "
-                          << "✓ Dependency satisfied, " << task.wait_for_task_id << " completed" << std::endl;
+                log_with_timestamp("✓ Dependency satisfied, " + task.wait_for_task_id + " completed");
             }
             
             // Log task launch
-            int64_t absolute_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
-            std::cout << "[" << std::setw(13) << absolute_time_ms << " ms] "
-                      << "→ Launching SEQUENTIAL task: " << task.task_id;
+            std::string msg = "→ Launching SEQUENTIAL task: " + task.task_id;
             if (!task.wait_for_task_id.empty()) {
-                std::cout << " (after " << task.wait_for_task_id << ")";
+                msg += " (after " + task.wait_for_task_id + ")";
             }
-            std::cout << std::endl;
+            log_with_timestamp(msg);
             
             // Launch task on separate thread
             {
@@ -340,20 +336,71 @@ void Orchestrator::scheduler_loop() {
     std::cout << "\n[Orchestrator] ========================================" << std::endl;
     std::cout << "[Orchestrator] All tasks completed successfully!" << std::endl;
     std::cout << "[Orchestrator] ========================================\n" << std::endl;
+    
+    // Print context switch statistics
+    std::cout << "\n[Orchestrator] === Context Switch Statistics ===" << std::endl;
+    int64_t total_context_switch_time = 0;
+    int64_t min_context_switch = INT64_MAX;
+    int64_t max_context_switch = 0;
+    int context_switch_count = 0;
+    
+    for (const auto& task : completed_tasks_) {
+        if (task.context_switch_time_us > 0) {
+            total_context_switch_time += task.context_switch_time_us;
+            min_context_switch = std::min(min_context_switch, task.context_switch_time_us);
+            max_context_switch = std::max(max_context_switch, task.context_switch_time_us);
+            context_switch_count++;
+            
+            std::cout << "[Orchestrator] Task " << task.task_id 
+                      << ": " << task.context_switch_time_us << " µs ("
+                      << (task.context_switch_time_us / 1000.0) << " ms)" << std::endl;
+        }
+    }
+    
+    if (context_switch_count > 0) {
+        double avg_context_switch = static_cast<double>(total_context_switch_time) / context_switch_count;
+        std::cout << "\n[Orchestrator] Context Switch Summary:" << std::endl;
+        std::cout << "  - Count: " << context_switch_count << std::endl;
+        std::cout << "  - Average: " << avg_context_switch << " µs (" 
+                  << (avg_context_switch / 1000.0) << " ms)" << std::endl;
+        std::cout << "  - Min: " << min_context_switch << " µs (" 
+                  << (min_context_switch / 1000.0) << " ms)" << std::endl;
+        std::cout << "  - Max: " << max_context_switch << " µs (" 
+                  << (max_context_switch / 1000.0) << " ms)" << std::endl;
+        std::cout << "  - Total: " << total_context_switch_time << " µs (" 
+                  << (total_context_switch_time / 1000.0) << " ms)" << std::endl;
+    }
+    std::cout << "[Orchestrator] ===================================\n" << std::endl;
+    
     completion_cv_.notify_all();
 }
 
 void Orchestrator::execute_task(const ScheduledTask& task) {
+    // Measure start time BEFORE any communication
+    int64_t task_start_time = get_current_time_us() - start_time_us_;
+    
     // Register task BEFORE sending start command to avoid race condition
     {
         std::lock_guard<std::mutex> lock(mutex_);
         TaskExecution exec;
         exec.task_id = task.task_id;
         exec.scheduled_time_us = task.scheduled_time_us;
-        exec.actual_start_time_us = get_current_time_us() - start_time_us_;  // Relative to start
-        exec.estimated_duration_us = task.estimated_duration_us;  // Save estimated duration
+        exec.actual_start_time_us = task_start_time;  // Measured by orchestrator
+        exec.estimated_duration_us = task.estimated_duration_us;
         exec.state = TASK_STATE_STARTING;
         exec.result = TASK_RESULT_UNKNOWN;
+        
+        // Calculate context switch time (time between previous task end and this task start)
+        if (last_task_end_time_us_ > 0) {
+            exec.context_switch_time_us = task_start_time - last_task_end_time_us_;
+            
+            // Log context switch time
+            std::cout << "[Orchestrator] ⏱️  Context Switch Time: " 
+                      << exec.context_switch_time_us << " µs ("
+                      << (exec.context_switch_time_us / 1000.0) << " ms)" << std::endl;
+        } else {
+            exec.context_switch_time_us = 0;  // First task, no context switch
+        }
         
         active_tasks_[task.task_id] = exec;
         
@@ -412,34 +459,24 @@ void Orchestrator::execute_task(const ScheduledTask& task) {
     // Send start command
     grpc::Status status = stub->StartTask(&context, request, &response);
     
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto it = active_tasks_.find(task.task_id);
+    
     if (status.ok() && response.success()) {
-        // Task started successfully - no log needed here, launch log already printed
-        
-        // Update task execution state
-        std::lock_guard<std::mutex> lock(mutex_);
-        auto it = active_tasks_.find(task.task_id);
+        // Task started successfully - update execution state
+        // Note: Time is measured by orchestrator, not by task
         if (it != active_tasks_.end()) {
-            // Use the response time if available, otherwise keep the registered time
-            if (response.actual_start_time_us() > 0) {
-                it->second.actual_start_time_us = response.actual_start_time_us() - start_time_us_;
-            }
             it->second.state = TASK_STATE_RUNNING;
         }
     } else {
+        // Mark task as failed
         std::cerr << "[Orchestrator] Failed to start task " << task.task_id 
                   << ": " << status.error_message() << std::endl;
         
-        // Mark task as failed
-        std::lock_guard<std::mutex> lock(mutex_);
-        TaskExecution exec;
-        exec.task_id = task.task_id;
-        exec.scheduled_time_us = task.scheduled_time_us;
-        exec.actual_start_time_us = get_current_time_us() - start_time_us_;  // Relative to start
-        exec.end_time_us = exec.actual_start_time_us;
-        exec.estimated_duration_us = task.estimated_duration_us;  // Save estimated duration
-        exec.state = TASK_STATE_FAILED;
-        exec.result = TASK_RESULT_FAILURE;
-        exec.error_message = status.error_message();
+        int64_t now = get_current_time_us() - start_time_us_;
+        TaskExecution exec{task.task_id, task.scheduled_time_us, now, now, 
+                          task.estimated_duration_us, 0, TASK_STATE_FAILED, 
+                          TASK_RESULT_FAILURE, status.error_message()};
         
         completed_tasks_.push_back(exec);
         
