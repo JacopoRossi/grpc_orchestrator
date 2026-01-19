@@ -21,6 +21,7 @@ COPY CMakeLists.txt ./
 COPY proto/ ./proto/
 COPY include/ ./include/
 COPY src/ ./src/
+COPY tasks/ ./tasks/
 COPY examples/ ./examples/
 COPY schedules/ ./schedules/
 

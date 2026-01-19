@@ -21,6 +21,7 @@ COPY CMakeLists.txt ./
 COPY proto/ ./proto/
 COPY include/ ./include/
 COPY src/ ./src/
+COPY tasks/ ./tasks/
 COPY examples/ ./examples/
 
 # Build the project
@@ -40,10 +41,8 @@ RUN apt-get update && apt-get install -y \
     libyaml-cpp0.8 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy binaries from builder
-COPY --from=builder /build/build/bin/task1_data_analyzer /app/task1_data_analyzer
-COPY --from=builder /build/build/bin/task2_image_processor /app/task2_image_processor
-COPY --from=builder /build/build/bin/task3_report_generator /app/task3_report_generator
+# Copy binary from builder
+COPY --from=builder /build/build/bin/task_runner /app/task_runner
 
 WORKDIR /app
 
@@ -51,4 +50,4 @@ WORKDIR /app
 EXPOSE 50051
 
 # Default command (will be overridden by docker-compose)
-CMD ["./task1_data_analyzer", "--name", "task_1", "--address", "0.0.0.0:50051", "--orchestrator", "orchestrator:50050"]
+CMD ["./task_runner", "--address", "0.0.0.0:50051", "--task_type", "task_1"]

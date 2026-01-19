@@ -1,0 +1,60 @@
+# Makefile for standalone deploy_manager_main compilation
+CXX = g++
+CXXFLAGS = -std=c++17 -Wall -O2
+INCLUDES = -I include -I .
+LIBS = -lyaml-cpp -lgrpc++ -lprotobuf -lpthread
+
+# Protobuf/gRPC plugin
+PROTOC = protoc
+GRPC_CPP_PLUGIN = grpc_cpp_plugin
+GRPC_CPP_PLUGIN_PATH = $(shell which $(GRPC_CPP_PLUGIN))
+
+# Source files
+PROTO_DIR = proto
+PROTO_FILE = $(PROTO_DIR)/orchestrator.proto
+PROTO_SRCS = orchestrator.pb.cc orchestrator.grpc.pb.cc
+PROTO_OBJS = $(PROTO_SRCS:.cc=.o)
+
+DEPLOY_SRCS = src/deploy_manager.cpp examples/deploy_manager_main.cpp
+DEPLOY_OBJS = deploy_manager.o deploy_manager_main.o
+
+# Targets
+.PHONY: all clean proto
+
+all: deploy_manager_main
+
+# Generate protobuf files
+proto: $(PROTO_SRCS)
+
+%.pb.cc %.pb.h: $(PROTO_FILE)
+	$(PROTOC) --cpp_out=. --grpc_out=. \
+		--plugin=protoc-gen-grpc=$(GRPC_CPP_PLUGIN_PATH) \
+		-I $(PROTO_DIR) $<
+
+# Compile protobuf objects
+orchestrator.pb.o: orchestrator.pb.cc
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+orchestrator.grpc.pb.o: orchestrator.grpc.pb.cc
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+# Compile deploy_manager
+deploy_manager.o: src/deploy_manager.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+# Compile main
+deploy_manager_main.o: examples/deploy_manager_main.cpp
+	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
+
+# Link executable
+deploy_manager_main: proto $(PROTO_OBJS) $(DEPLOY_OBJS)
+	$(CXX) $(DEPLOY_OBJS) $(PROTO_OBJS) $(LIBS) -o $@
+	@echo ""
+	@echo "✅ Deploy Manager compiled successfully!"
+	@echo "   Run with: ./deploy_manager_main build"
+	@echo ""
+
+# Clean
+clean:
+	rm -f *.o *.pb.cc *.pb.h deploy_manager_main
+	@echo "Cleaned build artifacts"

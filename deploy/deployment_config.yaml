@@ -1,0 +1,146 @@
+# Deploy Manager Configuration
+# Definisce i task, le loro immagini Docker e come deployarli
+
+deployment:
+  name: "gRPC Orchestrator Deployment"
+  description: "Deployment configuration for orchestrator and tasks"
+  
+  # Network configuration
+  network:
+    name: "grpc_network"
+    driver: "bridge"
+  
+  # Orchestrator configuration
+  orchestrator:
+    container_name: "grpc_orchestrator"
+    hostname: "orchestrator"
+    image: "grpc_orchestrator:latest"
+    dockerfile: "Dockerfile.orchestrator"
+    address: "0.0.0.0:50050"
+    schedule_file: "schedules/example_parametrized.yaml"
+    
+    # Real-time configuration
+    rt_config:
+      policy: "fifo"
+      priority: 80
+      cpu_affinity: 0
+      lock_memory: true
+    
+    # Resource limits
+    resources:
+      cpuset: "0"
+      memlock: 2048000000
+    
+    # Capabilities
+    capabilities:
+      - SYS_NICE
+    
+    # Health check
+    healthcheck:
+      command: "pgrep -f orchestrator_main"
+      interval: 5
+      timeout: 3
+      retries: 3
+  
+  # Task definitions
+  tasks:
+    # Task 1: Data Analyzer
+    - id: "task_1"
+      container_name: "grpc_task1"
+      hostname: "task1"
+      image: "grpc_task:latest"
+      dockerfile: "Dockerfile.task"
+      address: "0.0.0.0:50051"
+      port: 50051
+      
+      # Task-specific configuration
+      task_type: "task_1"  # Maps to task_runner registry
+      
+      # Real-time configuration (optional, can be overridden by schedule)
+      rt_config:
+        policy: "fifo"
+        priority: 50
+        cpu_affinity: -1
+      
+      # Resource limits
+      resources:
+        memlock: 2048000000
+      
+      # Capabilities
+      capabilities:
+        - SYS_NICE
+      
+      # Health check
+      healthcheck:
+        command: "pgrep -f task_runner"
+        interval: 5
+        timeout: 3
+        retries: 3
+    
+    # Task 2: Image Processor
+    - id: "task_2"
+      container_name: "grpc_task2"
+      hostname: "task2"
+      image: "grpc_task:latest"
+      dockerfile: "Dockerfile.task"
+      address: "0.0.0.0:50052"
+      port: 50052
+      
+      task_type: "task_2"
+      
+      rt_config:
+        policy: "fifo"
+        priority: 50
+        cpu_affinity: -1
+      
+      resources:
+        memlock: 2048000000
+      
+      capabilities:
+        - SYS_NICE
+      
+      healthcheck:
+        command: "pgrep -f task_runner"
+        interval: 5
+        timeout: 3
+        retries: 3
+    
+    # Task 3: Report Generator
+    - id: "task_3"
+      container_name: "grpc_task3"
+      hostname: "task3"
+      image: "grpc_task:latest"
+      dockerfile: "Dockerfile.task"
+      address: "0.0.0.0:50053"
+      port: 50053
+      
+      task_type: "task_3"
+      
+      rt_config:
+        policy: "fifo"
+        priority: 50
+        cpu_affinity: -1
+      
+      resources:
+        memlock: 2048000000
+      
+      capabilities:
+        - SYS_NICE
+      
+      healthcheck:
+        command: "pgrep -f task_runner"
+        interval: 5
+        timeout: 3
+        retries: 3
+
+  # Build configuration
+  build:
+    context: "."
+    parallel: true
+    no_cache: false
+    
+  # Deployment strategy
+  strategy:
+    type: "sequential"  # or "parallel"
+    wait_for_healthy: true
+    startup_timeout: 30  # seconds

@@ -76,6 +76,7 @@ add_library(orchestrator_lib
     src/task_wrapper.cpp
     src/schedule.cpp
     src/rt_utils.cpp
+    src/deploy_manager.cpp
     ${PROTO_SRCS}
     ${GRPC_SRCS}
 )
@@ -110,53 +111,50 @@ target_link_libraries(orchestrator_main
         orchestrator_lib
 )
 
-# Task 1: Data Analyzer
-add_executable(task1_data_analyzer
-    examples/task1_data_analyzer.cpp
+# Deploy Manager executable
+add_executable(deploy_manager_main
+    examples/deploy_manager_main.cpp
 )
 
-target_link_libraries(task1_data_analyzer
+target_link_libraries(deploy_manager_main
     PRIVATE
         orchestrator_lib
 )
 
-# Task 2: Image Processor
-add_executable(task2_image_processor
-    examples/task2_image_processor.cpp
+# Legacy task executable (for backward compatibility - if needed)
+# add_executable(task_main
+#     examples/task_main.cpp
+# )
+# 
+# target_link_libraries(task_main
+#     PRIVATE
+#         orchestrator_lib
+# )
+
+# ============================================================================
+# Modular Task Runner (NEW!)
+# ============================================================================
+
+# Generic task runner with modular task definitions
+add_executable(task_runner
+    tasks/task_runner.cpp
 )
 
-target_link_libraries(task2_image_processor
+target_link_libraries(task_runner
     PRIVATE
         orchestrator_lib
 )
 
-# Task 3: Report Generator
-add_executable(task3_report_generator
-    examples/task3_report_generator.cpp
-)
-
-target_link_libraries(task3_report_generator
+target_include_directories(task_runner
     PRIVATE
-        orchestrator_lib
-)
-
-# Legacy task executable (for backward compatibility)
-add_executable(task_main
-    examples/task_main.cpp
-)
-
-target_link_libraries(task_main
-    PRIVATE
-        orchestrator_lib
+        ${CMAKE_CURRENT_SOURCE_DIR}/tasks
 )
 
 # ============================================================================
 # Installation
 # ============================================================================
 
-install(TARGETS orchestrator_lib orchestrator_main 
-                task1_data_analyzer task2_image_processor task3_report_generator
-                task_main
+install(TARGETS orchestrator_lib orchestrator_main deploy_manager_main task_runner
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
