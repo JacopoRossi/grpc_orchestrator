@@ -66,6 +66,16 @@ struct OrchestratorConfig {
     int healthcheck_retries;
 };
 
+// GitLab Registry configuration
+struct GitLabRegistryConfig {
+    std::string registry_url;
+    std::string project_path;
+    std::string username;
+    std::string access_token;
+    bool use_ci_token;
+    bool enabled;
+};
+
 // Deployment configuration
 struct DeploymentConfig {
     std::string name;
@@ -76,10 +86,8 @@ struct DeploymentConfig {
     OrchestratorConfig orchestrator;
     std::vector<ContainerConfig> tasks;
     
-    // Build settings
-    std::string build_context;
-    bool build_parallel;
-    bool build_no_cache;
+    // GitLab configuration
+    GitLabRegistryConfig gitlab;
     
     // Deployment strategy
     std::string strategy_type;
@@ -96,9 +104,14 @@ public:
     // Load deployment configuration from YAML
     bool load_config(const std::string& config_path);
     
-    // Build Docker images
-    bool build_images();
-    bool build_image(const std::string& dockerfile, const std::string& tag);
+    // GitLab authentication
+    bool login_to_gitlab();
+    bool logout_from_gitlab();
+    
+    // Pull Docker images from GitLab
+    bool pull_all_images();
+    bool pull_image(const std::string& image_name);
+    std::string get_gitlab_image_name(const std::string& local_image);
     
     // Deploy containers
     bool deploy_all();
@@ -135,8 +148,10 @@ public:
 private:
     DeploymentConfig config_;
     bool config_loaded_;
+    bool gitlab_logged_in_;
     
     // Helper methods
+    std::string get_gitlab_token();
     std::string execute_command(const std::string& command);
     bool execute_command_bool(const std::string& command);
     std::string generate_docker_run_command(const ContainerConfig& config);

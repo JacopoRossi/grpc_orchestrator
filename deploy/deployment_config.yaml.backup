@@ -138,7 +138,7 @@ deployment:
   gitlab:
     enabled: true  # Set to true to enable GitLab registry
     registry_url: "registry.gitlab.com"
-    project_path: "jacoporossi/grpc_project"
+    project_path: "JacopoRossi/grpc_project"
     username: "JacopoRossi"
     access_token: "glpat-jqPXN4PHwNBMGtlFqnIUCW86MQp1OjNpMW0zCw.01.1217xkb37"
     use_ci_token: true  # Use CI_JOB_TOKEN environment variable

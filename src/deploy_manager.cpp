@@ -11,10 +11,13 @@
 
 namespace orchestrator {
 
-DeployManager::DeployManager() : config_loaded_(false) {
+DeployManager::DeployManager() : config_loaded_(false), gitlab_logged_in_(false) {
 }
 
 DeployManager::~DeployManager() {
+    if (gitlab_logged_in_) {
+        logout_from_gitlab();
+    }
 }
 
 bool DeployManager::load_config(const std::string& config_path) {
@@ -57,41 +60,152 @@ bool DeployManager::execute_command_bool(const std::string& command) {
     return ret == 0;
 }
 
-bool DeployManager::build_images() {
+std::string DeployManager::get_gitlab_token() {
+    // If using CI token, try to get it from environment
+    if (config_.gitlab.use_ci_token) {
+        const char* ci_token = std::getenv("CI_JOB_TOKEN");
+        if (ci_token) {
+            std::cout << "[DeployManager] Using CI_JOB_TOKEN for authentication" << std::endl;
+            return std::string(ci_token);
+        } else {
+            std::cout << "[DeployManager] CI_JOB_TOKEN not found, falling back to access_token" << std::endl;
+        }
+    }
+    
+    return config_.gitlab.access_token;
+}
+
+bool DeployManager::login_to_gitlab() {
     if (!config_loaded_) {
         std::cerr << "[DeployManager] Configuration not loaded" << std::endl;
         return false;
     }
     
-    std::cout << "[DeployManager] Building Docker images..." << std::endl;
+    if (!config_.gitlab.enabled) {
+        std::cout << "[DeployManager] GitLab registry not enabled, skipping login" << std::endl;
+        return true;
+    }
     
-    // Build orchestrator image
-    std::cout << "[DeployManager] Building orchestrator image..." << std::endl;
-    if (!build_image(config_.orchestrator.dockerfile, config_.orchestrator.image)) {
-        std::cerr << "[DeployManager] Failed to build orchestrator image" << std::endl;
+    std::cout << "[DeployManager] Logging in to GitLab registry..." << std::endl;
+    
+    std::string token = get_gitlab_token();
+    if (token.empty()) {
+        std::cerr << "[DeployManager] No GitLab token available" << std::endl;
         return false;
     }
     
-    // Build task image (shared by all tasks)
-    if (!config_.tasks.empty()) {
-        std::cout << "[DeployManager] Building task image..." << std::endl;
-        if (!build_image(config_.tasks[0].dockerfile, config_.tasks[0].image)) {
-            std::cerr << "[DeployManager] Failed to build task image" << std::endl;
+    std::string command = "echo " + token + " | docker login " + 
+                         config_.gitlab.registry_url + 
+                         " -u " + config_.gitlab.username + 
+                         " --password-stdin 2>&1";
+    
+    std::string result = execute_command(command);
+    
+    if (result.find("Login Succeeded") != std::string::npos) {
+        std::cout << "[DeployManager] Successfully logged in to GitLab registry" << std::endl;
+        gitlab_logged_in_ = true;
+        return true;
+    } else {
+        std::cerr << "[DeployManager] Failed to login to GitLab registry" << std::endl;
+        std::cerr << "  Output: " << result << std::endl;
+        return false;
+    }
+}
+
+bool DeployManager::logout_from_gitlab() {
+    if (!config_.gitlab.enabled) {
+        return true;
+    }
+    
+    std::cout << "[DeployManager] Logging out from GitLab registry..." << std::endl;
+    
+    std::string command = "docker logout " + config_.gitlab.registry_url;
+    bool success = execute_command_bool(command);
+    
+    if (success) {
+        gitlab_logged_in_ = false;
+        std::cout << "[DeployManager] Successfully logged out" << std::endl;
+    }
+    
+    return success;
+}
+
+std::string DeployManager::get_gitlab_image_name(const std::string& local_image) {
+    if (!config_.gitlab.enabled) {
+        return local_image;
+    }
+    
+    return config_.gitlab.registry_url + "/" + 
+           config_.gitlab.project_path + "/" + 
+           local_image;
+}
+
+bool DeployManager::pull_image(const std::string& image_name) {
+    std::string full_image = config_.gitlab.enabled ? get_gitlab_image_name(image_name) : image_name;
+    
+    std::cout << "[DeployManager] Pulling image: " << full_image << std::endl;
+    
+    std::string command = "docker pull " + full_image;
+    
+    if (!execute_command_bool(command)) {
+        std::cerr << "[DeployManager] Failed to pull image: " << full_image << std::endl;
+        return false;
+    }
+    
+    // Tag with local name if different
+    if (config_.gitlab.enabled && full_image != image_name) {
+        std::cout << "[DeployManager] Tagging as: " << image_name << std::endl;
+        std::string tag_cmd = "docker tag " + full_image + " " + image_name;
+        if (!execute_command_bool(tag_cmd)) {
+            std::cerr << "[DeployManager] Failed to tag image" << std::endl;
             return false;
         }
     }
     
-    std::cout << "[DeployManager] All images built successfully" << std::endl;
+    std::cout << "[DeployManager] Image pulled successfully" << std::endl;
     return true;
 }
 
-bool DeployManager::build_image(const std::string& dockerfile, const std::string& tag) {
-    std::string cache_flag = config_.build_no_cache ? "--no-cache" : "";
-    std::string command = "docker build " + cache_flag + " -f " + dockerfile + 
-                         " -t " + tag + " " + config_.build_context;
+bool DeployManager::pull_all_images() {
+    if (!config_loaded_) {
+        std::cerr << "[DeployManager] Configuration not loaded" << std::endl;
+        return false;
+    }
     
-    std::cout << "[DeployManager] Executing: " << command << std::endl;
-    return execute_command_bool(command);
+    // If GitLab is disabled, skip pulling (use local images)
+    if (!config_.gitlab.enabled) {
+        std::cout << "[DeployManager] GitLab disabled, using local Docker images" << std::endl;
+        return true;
+    }
+    
+    std::cout << "[DeployManager] Pulling Docker images from GitLab..." << std::endl;
+    
+    // Login to GitLab if enabled
+    if (config_.gitlab.enabled && !gitlab_logged_in_) {
+        if (!login_to_gitlab()) {
+            std::cerr << "[DeployManager] Failed to login to GitLab" << std::endl;
+            return false;
+        }
+    }
+    
+    // Pull orchestrator image
+    std::cout << "[DeployManager] Pulling orchestrator image..." << std::endl;
+    if (!pull_image(config_.orchestrator.image)) {
+        std::cerr << "[DeployManager] Failed to pull orchestrator image" << std::endl;
+        return false;
+    }
+    
+    // Pull task image (shared by all tasks)
+    if (!config_.tasks.empty()) {
+        std::cout << "[DeployManager] Pulling task image..." << std::endl;
+        if (!pull_image(config_.tasks[0].image)) {
+            std::cerr << "[DeployManager] Failed to pull task image" << std::endl;
+            return false;
+        }
+    }
+    
+    std::cout << "[DeployManager] All images pulled successfully" << std::endl;
+    return true;
 }
 
 bool DeployManager::create_network() {
@@ -530,11 +644,18 @@ DeploymentConfig DeploymentConfigParser::parse_yaml(const std::string& yaml_path
         deployment.tasks.push_back(task);
     }
     
-    // Build configuration
-    YAML::Node build = deploy["build"];
-    deployment.build_context = build["context"].as<std::string>();
-    deployment.build_parallel = build["parallel"].as<bool>();
-    deployment.build_no_cache = build["no_cache"].as<bool>();
+    // GitLab configuration
+    if (deploy["gitlab"]) {
+        YAML::Node gitlab = deploy["gitlab"];
+        deployment.gitlab.enabled = get_yaml<bool>(gitlab, "enabled", false);
+        deployment.gitlab.registry_url = get_yaml<std::string>(gitlab, "registry_url", "");
+        deployment.gitlab.project_path = get_yaml<std::string>(gitlab, "project_path", "");
+        deployment.gitlab.username = get_yaml<std::string>(gitlab, "username", "gitlab-ci-token");
+        deployment.gitlab.access_token = get_yaml<std::string>(gitlab, "access_token", "");
+        deployment.gitlab.use_ci_token = get_yaml<bool>(gitlab, "use_ci_token", false);
+    } else {
+        deployment.gitlab.enabled = false;
+    }
     
     // Strategy
     YAML::Node strategy = deploy["strategy"];

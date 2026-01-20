@@ -1,0 +1,197 @@
+# GitLab CI/CD Configuration Example
+# Copia questo file come .gitlab-ci.yml nella root del repository
+
+stages:
+  - build
+  - test
+  - push
+  - deploy
+
+variables:
+  # Docker image for CI/CD
+  DOCKER_IMAGE: "docker:24.0.5"
+  DOCKER_DIND_IMAGE: "docker:24.0.5-dind"
+
+# Template per job Docker
+.docker_job:
+  image: $DOCKER_IMAGE
+  services:
+    - name: $DOCKER_DIND_IMAGE
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: "/certs"
+    DOCKER_TLS_VERIFY: 1
+    DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  before_script:
+    # Install dependencies
+    - apk add --no-cache cmake g++ make git protobuf-dev grpc-dev yaml-cpp-dev nlohmann-json
+
+# ============================================================================
+# BUILD STAGE - Compila il progetto
+# ============================================================================
+
+build-project:
+  stage: build
+  extends: .docker_job
+  script:
+    - echo "Building gRPC Orchestrator project..."
+    - cmake -B build -DCMAKE_BUILD_TYPE=Release
+    - cmake --build build -j$(nproc)
+  artifacts:
+    paths:
+      - build/bin/
+      - build/lib/
+    expire_in: 1 hour
+  only:
+    - main
+    - develop
+    - tags
+
+# ============================================================================
+# TEST STAGE - Test unitari (opzionale)
+# ============================================================================
+
+unit-tests:
+  stage: test
+  extends: .docker_job
+  dependencies:
+    - build-project
+  script:
+    - echo "Running unit tests..."
+    # Add your test commands here
+    # - ./build/bin/run_tests
+  only:
+    - main
+    - develop
+    - merge_requests
+
+# ============================================================================
+# PUSH STAGE - Build e push delle immagini Docker su GitLab Registry
+# ============================================================================
+
+build-and-push-images:
+  stage: push
+  extends: .docker_job
+  dependencies:
+    - build-project
+  script:
+    - echo "Building and pushing Docker images to GitLab Container Registry..."
+    
+    # Verifica configurazione
+    - cat deploy/builder_config.yaml
+    
+    # Build e push usando Builder Manager
+    - ./build/bin/builder_manager_main build-push --config deploy/builder_config.yaml
+    
+    # Verifica immagini
+    - docker images | grep grpc
+    
+  only:
+    - main
+    - tags
+  when: on_success
+
+# ============================================================================
+# DEPLOY STAGE - Deploy su ambiente di staging/produzione
+# ============================================================================
+
+deploy-staging:
+  stage: deploy
+  extends: .docker_job
+  dependencies:
+    - build-project
+    - build-and-push-images
+  script:
+    - echo "Deploying to staging environment..."
+    
+    # Cleanup deployment precedente
+    - ./build/bin/deploy_manager_main cleanup --config deploy/deployment_config.yaml || true
+    
+    # Deploy nuovo
+    - ./build/bin/deploy_manager_main deploy --config deploy/deployment_config.yaml
+    
+    # Verifica status
+    - ./build/bin/deploy_manager_main status --config deploy/deployment_config.yaml
+    
+  environment:
+    name: staging
+    url: http://staging.example.com
+  only:
+    - develop
+  when: manual
+
+deploy-production:
+  stage: deploy
+  extends: .docker_job
+  dependencies:
+    - build-project
+    - build-and-push-images
+  script:
+    - echo "Deploying to production environment..."
+    
+    # Backup configurazione corrente (opzionale)
+    - ./build/bin/deploy_manager_main status --config deploy/deployment_config.yaml || true
+    
+    # Cleanup deployment precedente
+    - ./build/bin/deploy_manager_main cleanup --config deploy/deployment_config.yaml || true
+    
+    # Deploy nuovo
+    - ./build/bin/deploy_manager_main deploy --config deploy/deployment_config.yaml
+    
+    # Verifica health
+    - sleep 10
+    - ./build/bin/deploy_manager_main status --config deploy/deployment_config.yaml
+    
+  environment:
+    name: production
+    url: http://production.example.com
+  only:
+    - main
+    - tags
+  when: manual
+
+# ============================================================================
+# UTILITY JOBS - Job di utilità
+# ============================================================================
+
+# Job per verificare configurazione
+check-config:
+  stage: build
+  image: alpine:latest
+  script:
+    - apk add --no-cache yamllint
+    - echo "Checking YAML configuration files..."
+    - yamllint deploy/builder_config.yaml
+    - yamllint deploy/deployment_config.yaml
+    - yamllint schedules/*.yaml
+  only:
+    - merge_requests
+    - develop
+    - main
+
+# Job per cleanup manuale
+cleanup-environment:
+  stage: deploy
+  extends: .docker_job
+  dependencies:
+    - build-project
+  script:
+    - echo "Cleaning up environment..."
+    - ./build/bin/deploy_manager_main cleanup --config deploy/deployment_config.yaml
+  when: manual
+  allow_failure: true
+
+# ============================================================================
+# NOTES
+# ============================================================================
+#
+# 1. Assicurati che il GitLab Runner abbia accesso a Docker
+# 2. Configura le variabili CI/CD in GitLab:
+#    - Settings > CI/CD > Variables
+#    - Aggiungi GITLAB_ACCESS_TOKEN se non usi CI_JOB_TOKEN
+# 3. Verifica che builder_config.yaml sia configurato correttamente:
+#    - project_path deve corrispondere al tuo progetto
+#    - use_ci_token deve essere true per CI/CD
+# 4. Verifica che deployment_config.yaml abbia gitlab.enabled = true
+#

@@ -39,3 +39,5 @@ docker/volumes/
 
 # Other
 .DS_Store
+deploy/builder_config.yaml
+deploy/deployment_config.yaml

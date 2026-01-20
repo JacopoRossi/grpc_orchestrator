@@ -1,0 +1,89 @@
+# Builder Manager Configuration
+# Configures image building and pushing to GitLab Container Registry
+
+builder:
+  name: "gRPC Orchestrator Builder"
+  description: "Build configuration for orchestrator and task images"
+  
+  # GitLab Container Registry configuration
+  gitlab:
+    # GitLab registry URL (e.g., registry.gitlab.com)
+    registry_url: "registry.gitlab.com"
+    
+    # Project path in GitLab (e.g., username/project-name or group/subgroup/project-name)
+    # Update this with your actual GitLab project path
+    project_path: "JacopoRossi/grpc_project"
+    
+    # Authentication
+    # For local development: set access_token to your GitLab Personal Access Token
+    # For CI/CD: set use_ci_token to true to use CI_JOB_TOKEN environment variable
+    username: "JacopoRossi"
+    access_token: "glpat-jqPXN4PHwNBMGtlFqnIUCW86MQp1OjNpMW0zCw.01.1217xkb37"
+    use_ci_token: true  # Set to true in CI/CD pipelines
+  
+  # Images to build
+  images:
+    # Orchestrator image
+    - name: "grpc_orchestrator"
+      tag: "latest"
+      dockerfile: "Dockerfile.orchestrator"
+      context: "."
+      no_cache: false
+      build_args: {}
+    
+    # Task image
+    - name: "grpc_task"
+      tag: "latest"
+      dockerfile: "Dockerfile.task"
+      context: "."
+      no_cache: false
+      build_args: {}
+  
+  # Build settings
+  settings:
+    parallel: false                    # Build images in parallel (not implemented yet)
+    push_after_build: true             # Automatically push after successful build
+    cleanup_after_push: false          # Remove GitLab-tagged images after push
+
+# ============================================================================
+# Usage Examples:
+# ============================================================================
+#
+# 1. Build images locally:
+#    ./build/bin/builder_manager_main build
+#
+# 2. Push images to GitLab (requires login):
+#    ./build/bin/builder_manager_main push
+#
+# 3. Build and push (complete workflow):
+#    ./build/bin/builder_manager_main build-push
+#
+# 4. Check status:
+#    ./build/bin/builder_manager_main status
+#
+# 5. Login to GitLab manually:
+#    ./build/bin/builder_manager_main login
+#
+# ============================================================================
+# GitLab CI/CD Integration:
+# ============================================================================
+#
+# Add this to your .gitlab-ci.yml:
+#
+# build-images:
+#   stage: build
+#   script:
+#     - ./build/bin/builder_manager_main build-push --config deploy/builder_config.yaml
+#   only:
+#     - main
+#     - tags
+#
+# ============================================================================
+# Personal Access Token Setup:
+# ============================================================================
+#
+# 1. Go to GitLab: Settings > Access Tokens
+# 2. Create a token with 'read_registry' and 'write_registry' scopes
+# 3. Set the token in this file OR as environment variable:
+#    export GITLAB_ACCESS_TOKEN=your-token-here
+#

@@ -19,7 +19,7 @@ void signal_handler(int signal) {
 void print_usage(const char* program_name) {
     std::cout << "Usage: " << program_name << " [COMMAND] [OPTIONS]" << std::endl;
     std::cout << "\nCommands:" << std::endl;
-    std::cout << "  build                   Build Docker images" << std::endl;
+    std::cout << "  pull                    Pull Docker images from GitLab" << std::endl;
     std::cout << "  deploy                  Deploy all containers (tasks + orchestrator)" << std::endl;
     std::cout << "  deploy-tasks            Deploy only task containers" << std::endl;
     std::cout << "  deploy-orchestrator     Deploy only orchestrator container" << std::endl;
@@ -32,7 +32,7 @@ void print_usage(const char* program_name) {
     std::cout << "  --config <file>         Deployment config file (default: deploy/deployment_config.yaml)" << std::endl;
     std::cout << "  --help                  Show this help message" << std::endl;
     std::cout << "\nExamples:" << std::endl;
-    std::cout << "  " << program_name << " build" << std::endl;
+    std::cout << "  " << program_name << " pull" << std::endl;
     std::cout << "  " << program_name << " deploy-tasks" << std::endl;
     std::cout << "  " << program_name << " deploy-orchestrator" << std::endl;
     std::cout << "  " << program_name << " logs" << std::endl;
@@ -85,16 +85,16 @@ int main(int argc, char** argv) {
     // Execute command
     bool success = false;
     
-    if (command == "build") {
-        std::cout << "[DeployManager] Building images..." << std::endl;
-        success = deploy_manager.build_images();
+    if (command == "pull") {
+        std::cout << "[DeployManager] Pulling images from GitLab..." << std::endl;
+        success = deploy_manager.pull_all_images();
         
     } else if (command == "deploy") {
         std::cout << "[DeployManager] Deploying all containers (tasks + orchestrator)..." << std::endl;
         
-        // Build images first
-        if (!deploy_manager.build_images()) {
-            std::cerr << "[DeployManager] Build failed, aborting deployment" << std::endl;
+        // Pull images first
+        if (!deploy_manager.pull_all_images()) {
+            std::cerr << "[DeployManager] Pull failed, aborting deployment" << std::endl;
             return 1;
         }
         
@@ -104,9 +104,9 @@ int main(int argc, char** argv) {
     } else if (command == "deploy-tasks") {
         std::cout << "[DeployManager] Deploying task containers only..." << std::endl;
         
-        // Build images first
-        if (!deploy_manager.build_images()) {
-            std::cerr << "[DeployManager] Build failed, aborting deployment" << std::endl;
+        // Pull images first
+        if (!deploy_manager.pull_all_images()) {
+            std::cerr << "[DeployManager] Pull failed, aborting deployment" << std::endl;
             return 1;
         }
         
